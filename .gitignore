@@ -2,3 +2,4 @@
 /.idea/*
 /models/*
 /libs/__pycache__/*
+/temp/*
