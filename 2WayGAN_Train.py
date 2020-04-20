@@ -23,7 +23,7 @@ if __name__ == "__main__":
   
     
 
-    generatorX.load_state_dict(torch.load('./gan1_pretrain_100_4.pth'))
+    generatorX.load_state_dict(torch.load('./gan1_pretrain_100_4.pth', map_location=device))
 
     
 

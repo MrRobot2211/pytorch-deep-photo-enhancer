@@ -16,6 +16,6 @@ level_list=[['models'],[ 'gt_images',
 
 create_tree(level_list)
 
-level_list = ['model']
+level_list = [['model']]
 
 create_tree(level_list)

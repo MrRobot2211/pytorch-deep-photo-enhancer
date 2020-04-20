@@ -2,7 +2,10 @@ import torch
 import torch.nn as nn
 import inspect
 
-device = torch.device('cuda', 0)  # Default CUDA device
+if torch.cuda.is_available() :   
+    device = torch.device('cuda', 0)  # Default CUDA device
+else:
+    device = torch.device('cpu')
 device_ids = [0, 1, 2, 3]  # CUDA ids
 Tensor_gpu = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.FloatTensor
 Tensor = torch.FloatTensor
