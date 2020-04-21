@@ -28,7 +28,8 @@ Expert-C on [MIT-Adobe FiveK dataset](https://data.csail.mit.edu/graphics/fivek/
 ### Folders
 
 1. All hyperparameters are in `libs\constant.py`
-2. There are some folders need to be created:
+
+2. There are some folders need to be created, to do that just call python directory_structure.py:
    1. `images_LR`：Used to store datasets
       1. `Expert-C`
       2. `input`
