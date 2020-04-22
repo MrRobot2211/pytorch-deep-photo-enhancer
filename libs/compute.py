@@ -311,15 +311,17 @@ def computeAdversarialLosses(discriminator,discriminatorX, x, x1, y, y1):
 
     return ad, ag
 
-def compute_d_adv_loss(discriminator,discriminatorX, x, x1, y, y1):
+def compute_d_adv_loss(real,fake):
 
-    dx = discriminatorX(x)
-    dx1 = discriminatorX(x1)
-    dy = discriminator(y)
-    dy1 = discriminator(y1)
+    # dx = discriminatorX(x)
+    # dx1 = discriminatorX(x1)
+    # dy = discriminator(y)
+    # dy1 = discriminator(y1)
 
-    ad = torch.mean(dx) - torch.mean(dx1) + \
-         torch.mean(dy) - torch.mean(dy1)
+    # ad = torch.mean(dx) - torch.mean(dx1) + \
+    #     + torch.mean(dy) - torch.mean(dy1) 
+    ad = torch.mean(real) - torch.mean(fake)
+
     return ad
 
 def compute_g_adv_loss(discriminator,discriminatorX, x, x1, y, y1):

@@ -6,7 +6,7 @@ import itertools
 from libs.compute import *
 from libs.constant import *
 from libs.model import *
-
+import gc
 
 # we are missing weight decayed specified in the original as regularization loss
 # add cipping the equivalent to tf.clip_by_value  to  torch.clamp(input, 0 , 1 ) !!!!!!verify that we only clamp when applying the inverse!!!!!!!
@@ -91,23 +91,31 @@ if __name__ == "__main__":
             discriminatorY.zero_grad()
             fake_imgs = generatorX(trainInput)   # stands for Y'
 
-            x1 = torch.clamp(generatorY(realImgs),0,1)    # stands for x'
+            x1 = generatorY(torch.clamp(realImgs,0,1))    # stands for x'
 
-            x2 = torch.clamp(generatorY(fake_imgs),0,1)   # stands for x''
-            y2 = generatorX_(x1)          # stands for y''
+           # 
+            
+           # y2 = generatorX_(x1)          # stands for y''
 
             # Real Images
             realValid = discriminatorY(realImgs)     # stands for D_Y
             # Fake Images
-            fakeValid = discriminatorY(fake_imgs)     # stands for D_Y'
+            fakeValid = discriminatorY(fake_imgs.detach())     # stands for D_Y'
 
-           # dx = discriminatorX(trainInput)      # stands for D_X
-           # dx1 = discriminatorX(x1)             # stands for D_X'
+            # Real Images
+            dx = discriminatorX(trainInput)      # stands for D_X
+            # Fake Images
+            dx1 = discriminatorX(x1.detach())             # stands for D_X'
 
             set_requires_grad([discriminatorY,discriminatorX], True)
             #computing losses
             #ad, ag = computeAdversarialLosses(discriminatorY,discriminatorX, trainInput, x1, realImgs, fake_imgs)
-            ad = compute_d_adv_loss(discriminatorY,discriminatorX, trainInput, x1, realImgs, fake_imgs)
+            adY = compute_d_adv_loss(realValid,fakeValid)
+
+            adX =  compute_d_adv_loss(dx,dx1)
+
+            ad = adX + adY
+
 
             # ad.backward(retain_graph=True)
 
@@ -129,7 +137,7 @@ if __name__ == "__main__":
 
             if batches_done % 50 == 0:
                 
-                #set_requires_grad([discriminatorY,discriminatorX], False)
+                set_requires_grad([discriminatorY,discriminatorX], False)
                 
                 
                 # TRAIN GENERATOR
@@ -137,12 +145,17 @@ if __name__ == "__main__":
 
                 generatorY.zero_grad()
 
+
+                x2 = generatorY(torch.clamp(fake_imgs,0,1))   # stands for x''
+                y2 = generatorX_(x1)          # stands for y''
+
                 ag = compute_g_adv_loss(discriminatorY,discriminatorX, trainInput, x1, realImgs, fake_imgs)
 
                 i_loss = computeIdentityMappingLoss(trainInput, x1, realImgs, fake_imgs)
                 c_loss = computeCycleConsistencyLoss(trainInput, x2, realImgs, y2)
                 g_loss = computeGeneratorLossFor2WayGan(ag, i_loss, c_loss)
-                set_requires_grad([discriminatorY,discriminatorX], False)
+
+                #set_requires_grad([discriminatorY,discriminatorX], False)
                 # ag.backward(retain_graph=True)
                 # i_loss.backward(retain_graph=True)
                 # c_loss.backward(retain_graph=True)
@@ -152,6 +165,12 @@ if __name__ == "__main__":
 
 
                 optimizer_g.step()
+                
+                del ag,i_loss,c_loss,x2,y2 #,g_loss
+                if torch.cuda.is_available() :   
+                    torch.cuda.empty_cache()
+                else:
+                    gc.collect()
 
             print("[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f]" % (
                 epoch + 1, NUM_EPOCHS_TRAIN, i + 1, len(trainLoader_cross), d_loss.item(), g_loss.item()))
@@ -160,6 +179,8 @@ if __name__ == "__main__":
             f.write("[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f]\n" % (
                 epoch + 1, NUM_EPOCHS_TRAIN, i + 1, len(trainLoader_cross), d_loss.item(), g_loss.item()))
             f.close()
+            
+           
 
             if batches_done % 50 == 0:
                 for k in range(0, fake_imgs.data.shape[0]):
@@ -175,6 +196,11 @@ if __name__ == "__main__":
                     save_image(fake_test_imgs.data[k],
                                "./models/train_test_images/2Way/2Way_Train_Test_%d_%d_%d.png" % (epoch, batches_done, k),
                                nrow=1, normalize=True)
+                del fake_test_imgs
+                if torch.cuda.is_available() :   
+                    torch.cuda.empty_cache()
+                else:
+                    gc.collect()
 
             batches_done += 1
             print("Done training discriminator on iteration: %d" % i)
