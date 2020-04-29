@@ -84,7 +84,7 @@ if __name__ == "__main__":
                 epoch + 1, NUM_EPOCHS_TRAIN, i + 1, len(trainLoader_cross), dLoss.item(), gLoss.item()))
             f.close()
 
-            if batches_done % 50 == 0:
+            if batches_done % 10 == 0:
                 for k in range(0, fake_imgs.data.shape[0]):
                     save_image(fake_imgs.data[k], "./models/train_images/1Way/1Way_Train_%d_%d_%d.png" % (epoch+1, batches_done+1, k+1),
                                nrow=1,

@@ -11,9 +11,11 @@ import gc
 # we are missing weight decayed specified in the original as regularization loss
 # add cipping the equivalent to tf.clip_by_value  to  torch.clamp(input, 0 , 1 ) !!!!!!verify that we only clamp when applying the inverse!!!!!!!
 #add gradient clipping FLAGS['net_gradient_clip_value'] = 1e8    torch.nn.utils.clip_grad_value_
-#add he ( keras variance scaling ) init with the apropriate weight
-
+#add he ( keras variance scaling ) init with the apropriate weight debug that this is actually initializing all layers ( because of the use of apply)
+#complete loss_wgan_lambda and lambda_grow ...  seting process
+#analize tf_crop_rect
 clip_value = 1e8 
+D_G_ratio = 50
 
 if __name__ == "__main__":
 
@@ -24,8 +26,8 @@ if __name__ == "__main__":
   
     
 
-    generatorX.load_state_dict(torch.load('./gan1_pretrain_100_14.pth', map_location=device))
-
+    #generatorX.load_state_dict(torch.load('./gan1_pretrain_100_14.pth', map_location=device))
+    init_net(generatorX,'normal')
     
 
     generatorX_ = Generator_(generatorX)
@@ -38,20 +40,34 @@ if __name__ == "__main__":
     generatorX.train()
 
     generatorY = Generator()
+    init_net(generatorY,'normal')
+    
+    #generatorY.load_state_dict(torch.load('./gan1_pretrain_100_14.pth', map_location=device))
+    generatorY_ = Generator_(generatorY)
+    
     generatorY = nn.DataParallel(generatorY)
-    #generatorY.train()
+   
+    generatorY_ = nn.DataParallel(generatorY_)
 
+
+
+    generatorY.train()
+
+    
 
     discriminatorY = Discriminator()
+    init_net(discriminatorY,'normal')
     discriminatorY = nn.DataParallel(discriminatorY)
 
     discriminatorX = Discriminator()
+    init_net(discriminatorX,'normal')
     discriminatorX = nn.DataParallel(discriminatorX)
 
     if torch.cuda.is_available():
         generatorX.cuda(device=device)
         generatorX_.cuda(device=device)
         generatorY.cuda(device=device)
+        generatorY_.cuda(device=device)
 
         discriminatorY.cuda(device=device)
         discriminatorX.cuda(device=device)
@@ -65,12 +81,9 @@ if __name__ == "__main__":
     optimizer_g = optim.Adam(itertools.chain(generatorX.parameters(), generatorY.parameters()), lr=LEARNING_RATE, betas=(BETA1, BETA2))
     optimizer_d = optim.Adam(itertools.chain(discriminatorY.parameters(),discriminatorX.parameters()), lr=LEARNING_RATE, betas=(BETA1, BETA2))
 
-    # Training Network
-    dataiter = iter(testLoader)
-    gt_test, data_test = dataiter.next()
-    input_test, dummy = data_test
+    LambdaAdapt = LambdaAdapter(LAMBDA,D_G_ratio)
+
     
-    testInput = Variable(input_test.type(Tensor_gpu))
 
 
     batches_done = 0
@@ -78,28 +91,42 @@ if __name__ == "__main__":
     discriminator_loss = []
     for epoch in range(NUM_EPOCHS_TRAIN):
         for i, (data, gt1) in enumerate(trainLoader_cross, 0):
+
             input, dummy = data
             groundTruth, dummy = gt1
-            trainInput = Variable(input.type(Tensor_gpu))   # stands for X
+            
+            
+            realInput = Variable(input.type(Tensor_gpu))   # stands for X
             
 
-            realImgs = Variable(groundTruth.type(Tensor_gpu))   # stands for Y
+            realEnhanced = Variable(groundTruth.type(Tensor_gpu))   # stands for Y
             
 
 
            
-            fake_imgs = generatorX(trainInput)   # stands for Y'
+            fakeEnhanced = generatorX(realInput)   # stands for Y'
 
-            x1 = generatorY(torch.clamp(realImgs,0,1))    # stands for x'
+          
 
+         
+            fakeInput = generatorY(realEnhanced)           # stands for x'
+          
+            
+            
+         
+          
+          
            # 
             
            # y2 = generatorX_(x1)          # stands for y''
 
            
+            if (LambdaAdapt.netD_change_times_1 > 0 and LambdaAdapt.netD_times >= 0 and LambdaAdapt.netD_times % LambdaAdapt.netD_change_times_1 == 0) or batches_done % 50 == 0: 
+                LambdaAdapt.netD_times = 0
+           # if batches_done % 20 == 0:
+                recInput = generatorY_(torch.clamp(fakeEnhanced,0,1))     # stands for x''
+                recEnhanced = generatorX_(torch.clamp(fakeInput,0,1))   # stands for y''
 
-            if batches_done % 20 == 0:
-            
                 set_requires_grad([discriminatorY,discriminatorX], False)
                 
                 
@@ -109,13 +136,16 @@ if __name__ == "__main__":
                 generatorY.zero_grad()
 
 
-                x2 = generatorY(torch.clamp(fake_imgs,0,1))   # stands for x''
-                y2 = generatorX_(x1)          # stands for y''
+               
 
-                ag = compute_g_adv_loss(discriminatorY,discriminatorX, trainInput, x1, realImgs, fake_imgs)
+                ag = compute_g_adv_loss(discriminatorY,discriminatorX, fakeEnhanced,fakeInput)
+                
+                # i_loss = computeIdentityMappingLoss(realInput, fakeInput, realEnhanced, fakeEnhanced)
+                
+                i_loss = computeIdentityMappingLoss(generatorX, generatorY, realEnhanced,realInput)
 
-                i_loss = computeIdentityMappingLoss(trainInput, x1, realImgs, fake_imgs)
-                c_loss = computeCycleConsistencyLoss(trainInput, x2, realImgs, y2)
+                c_loss = computeCycleConsistencyLoss(realInput , recInput  , realEnhanced, recEnhanced)
+
                 g_loss = computeGeneratorLossFor2WayGan(ag, i_loss, c_loss)
 
                 #set_requires_grad([discriminatorY,discriminatorX], False)
@@ -129,7 +159,7 @@ if __name__ == "__main__":
 
                 optimizer_g.step()
                 
-                del ag,i_loss,c_loss,x2,y2 #,g_loss
+                del ag,i_loss,c_loss,recEnhanced,recInput#x2,y2 #,g_loss
                 if torch.cuda.is_available() :   
                     torch.cuda.empty_cache()
                 else:
@@ -140,25 +170,47 @@ if __name__ == "__main__":
         
 
             if batches_done % 500 == 0:
-                for k in range(0, fake_imgs.data.shape[0]):
-                    save_image(fake_imgs.data[k], "./models/train_images/2Way/2Way_Train_%d_%d_%d.png" % (epoch+1, batches_done+1, k+1),
-                                nrow=1,
-                                normalize=True)
-                torch.save(generatorX.state_dict(),
-                            './models/train_checkpoint/2Way/gan2_train_' + str(epoch) + '_' + str(i) + '.pth')
-                torch.save(discriminatorY.state_dict(),
-                            './models/train_checkpoint/2Way/discriminator2_train_' + str(epoch) + '_' + str(i) + '.pth')
-                fake_test_imgs = generatorX(testInput)
-                for k in range(0, fake_test_imgs.data.shape[0]):
-                    save_image(fake_test_imgs.data[k],
-                                "./models/train_test_images/2Way/2Way_Train_Test_%d_%d_%d.png" % (epoch, batches_done, k),
-                                nrow=1, normalize=True)
-                del fake_test_imgs
+                # Training Network
+                dataiter = iter(testLoader)
+                gt_test, data_test = dataiter.next()
+                input_test, dummy = data_test
+                Testgt, dummy = gt_test
+                
+                realInput_test = Variable(input_test.type(Tensor_gpu))
+                realEnhanced_test = Variable(Testgt.type(Tensor_gpu))
+                with torch.no_grad():
+                    psnrAvg = 0.0
+                    for k in range(0, realInput_test.data.shape[0]):
+                        save_image(realInput_test.data[k], "./models/train_images/2Way/2Way_Train_%d_%d_%d.png" % (epoch+1, batches_done+1, k+1),
+                                    nrow=1,
+                                    normalize=True)
+                    torch.save(generatorX.state_dict(),
+                                './models/train_checkpoint/2Way/gan2_train_' + str(epoch) + '_' + str(i) + '.pth')
+                    torch.save(discriminatorY.state_dict(),
+                                './models/train_checkpoint/2Way/discriminator2_train_' + str(epoch) + '_' + str(i) + '.pth')
+                    fakeEnhanced_test = generatorX(realInput_test)
+                    test_loss = criterion( realEnhanced_test,fakeEnhanced_test  )
+                     
+                    psnr = 10 * torch.log10(1 / test_loss)
+                    psnrAvg = psnr.mean()
+
+                    print("Loss loss: %f" % test_loss)
+                    print("PSNR Avg: %f" % (psnrAvg ))
+                    f = open("./models/psnr_Score_trailing.txt", "a+")
+                    f.write("PSNR Avg: %f" % (psnrAvg ))
+                    f.close()
+
+                    for k in range(0, fakeEnhanced_test.data.shape[0]):
+                        save_image(fakeEnhanced_test.data[k],
+                                    "./models/train_test_images/2Way/2Way_Train_Test_%d_%d_%d.png" % (epoch, batches_done, k),
+                                    nrow=1, normalize=True)
+                    
+                del fakeEnhanced_test ,realEnhanced_test , realInput_test,  gt_test, data_test, dataiter,dummy ,Testgt, input_test
+                
                 if torch.cuda.is_available() :   
                     torch.cuda.empty_cache()
                 else:
                     gc.collect()
-
             
             set_requires_grad([discriminatorY,discriminatorX], True)
 
@@ -166,21 +218,12 @@ if __name__ == "__main__":
             discriminatorX.zero_grad()
             discriminatorY.zero_grad()
 
-                # Real Images
-            realValid = discriminatorY(realImgs)     # stands for D_Y
-            # Fake Images
-            fakeValid = discriminatorY(fake_imgs.detach())     # stands for D_Y'
-
-            # Real Images
-            dx = discriminatorX(trainInput)      # stands for D_X
-            # Fake Images
-            dx1 = discriminatorX(x1.detach())             # stands for D_X'
-
+            
             
             #computing losses
             #ad, ag = computeAdversarialLosses(discriminatorY,discriminatorX, trainInput, x1, realImgs, fake_imgs)
             
-            ad = compute_d_adv_loss(realValid,fakeValid) + compute_d_adv_loss(dx,dx1)
+            ad = compute_d_adv_loss(discriminatorY,realEnhanced,fakeEnhanced ) + compute_d_adv_loss(discriminatorX,realInput,fakeInput)
 
 
             # ad.backward(retain_graph=True)
@@ -189,9 +232,14 @@ if __name__ == "__main__":
 
             # gradient_penalty.backward(retain_graph=True)
 
-            gradient_penalty =  compute_gradient_penalty(discriminatorY, realImgs, fake_imgs) + compute_gradient_penalty(discriminatorX, trainInput, x1)
+            gradient_penalty1 =  compute_gradient_penalty(discriminatorY, realEnhanced, fakeEnhanced) 
+            gradient_penalty2 =  compute_gradient_penalty(discriminatorX, realInput,fakeInput)
 
-            d_loss = computeDiscriminatorLossFor2WayGan(ad, gradient_penalty)
+            LambdaAdapt.update_penalty_weights(batches_done ,gradient_penalty1,gradient_penalty2)
+
+
+
+            d_loss = computeDiscriminatorLossFor2WayGan(ad, LambdaAdapt.netD_gp_weight_1*gradient_penalty1 + LambdaAdapt.netD_gp_weight_2 * gradient_penalty2)
             
             d_loss.backward()
 
@@ -200,10 +248,13 @@ if __name__ == "__main__":
             optimizer_d.step()
 
             batches_done += 1
+            LambdaAdapt.netD_times += 1
             print("Done training discriminator on iteration: %d" % i)
 
-            print("[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f]" % (
-                epoch + 1, NUM_EPOCHS_TRAIN, i + 1, len(trainLoader_cross), d_loss.item(), g_loss.item()))
+            print("[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f] [ad loss: %f]  [gp1 loss: %f] [gp2 loss: %f][wp1 loss: %f] [wp2 loss: %f]" % (
+                epoch + 1, NUM_EPOCHS_TRAIN, i + 1, len(trainLoader_cross), d_loss.item(), g_loss.item(),
+                 ad,gradient_penalty1,gradient_penalty2,LambdaAdapt.netD_gp_weight_1,LambdaAdapt.netD_gp_weight_2 ))
+            
 
             f = open("./models/log_Train.txt", "a+")
             f.write("[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f]\n" % (
@@ -213,6 +264,11 @@ if __name__ == "__main__":
             
     # TEST NETWORK
     batches_done = 0
+     # Training Network
+    dataiter = iter(testLoader)
+    gt_test, data_test = dataiter.next()
+    input_test, dummy = data_test
+    Testgt, dummy = gt_test
     with torch.no_grad():
         psnrAvg = 0.0
         for j, (gt, data) in enumerate(testLoader, 0):
