@@ -1,9 +1,11 @@
 import numpy as np
+import cv2
 import torchvision
 import torchvision.transforms as transforms
 from torch import autograd
 from torch.autograd import Variable
 from torch.utils.data import TensorDataset, DataLoader,Dataset
+from torchvision.datasets import ImageFolder
 import albumentations as albu
 from albumentations import torch as AT
 import pandas as pd
@@ -15,36 +17,132 @@ from libs.model import *
 #smp.encoders.get_preprocessing_fn()
 
 
-class CloudDataset(Dataset):
-    def __init__(self, df: pd.DataFrame = None, datatype: str = 'train', img_ids: np.array = None,
-                 transforms = albu.Compose([albu.HorizontalFlip(),AT.ToTensor()]),
-                preprocessing=None):
-        self.df = df
-        if datatype != 'test':
-            self.data_folder = f"{path}/train_images"
-        else:
-            self.data_folder = f"{path}/test_images"
-        self.img_ids = img_ids
-        self.transforms = transforms
-        self.preprocessing = preprocessing
+class ImageDataset(ImageFolder):
+    def __init__(self, root, transform=None):
+        super(ImageDataset, self).__init__( root, transform=transform)
 
-    def __getitem__(self, idx):
-        image_name = self.img_ids[idx]
-        mask = make_mask(self.df, image_name)
-        image_path = os.path.join(self.data_folder, image_name)
-        img = cv2.imread(image_path)
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        augmented = self.transforms(image=img, mask=mask)
+        # def __init__(self, df: pd.DataFrame = None, datatype: str = 'train', img_ids: np.array = None,
+        #             transform = None,
+        #             preprocessing=None):
+        #     self.df = df
+        #     if datatype != 'test':
+        #     self.data_folder = f"{path}/train_images"
+            
+        #self.img_ids = img_ids
+        #self.transforms = transforms
+        #self.preprocessing = preprocessing
+    def  _make_mask(self,img,output_size=(512,512)):
+        image_width, image_height = output_size
+        crop_height, crop_width = img.size
+        crop_top = int(round((image_height - crop_height) / 2.))
+        crop_left = int(round((image_width - crop_width) / 2.))
+        output = np.zeros(output_size)
+        output[crop_left:crop_left + crop_width, crop_top:crop_top +crop_width ] = 1
+        return output
+
+    def __getitem__(self, index):
+        
+        path, target = self.samples[index]
+        sample = self.loader(path)
+        #mask = self._make_mask( sample)
+        sample = np.array(sample)
+        mask = np.ones(sample.shape[:-1])
+        #img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        augmented = self.transform(image=sample, mask=mask)
+        
         img = augmented['image']
         mask = augmented['mask']
-        if self.preprocessing:
-            preprocessed = self.preprocessing(image=img, mask=mask)
-            img = preprocessed['image']
-            mask = preprocessed['mask']
+
+        # if self.preprocessing:
+        #     preprocessed = self.preprocessing(image=img, mask=mask)
+        #     img = preprocessed['image']
+        #     mask = preprocessed['mask']
+            
         return img, mask
 
-    def __len__(self):
-        return len(self.img_ids)
+    # def __len__(self):
+    #     return len(self.img_ids)
+
+
+
+def data_loader_mask():
+    """
+    Converting the images for PILImage to tensor,
+    so they can be accepted as the input to the network
+    :return :
+    """
+    print("Loading Dataset")
+    #transform = transforms.Compose([transforms.Resize((SIZE, SIZE), interpolation='PIL.Image.ANTIALIAS'), transforms.ToTensor()])
+    #transform = transforms.Compose([
+    # you can add other transformations in this list
+   # transforms.CenterCrop(512),
+   # transforms.ToTensor()  ])
+    default_transform = albu.Compose([ albu.PadIfNeeded(512,512,cv2.BORDER_CONSTANT,value=0,mask_value=0)
+    , AT.ToTensor()])
+  
+    transform = albu.Compose([ albu.PadIfNeeded(512,512,cv2.BORDER_CONSTANT,value=0,mask_value=0), albu.Rotate()
+    , AT.ToTensor()])
+  
+    testset_gt = ImageDataset(root='./images_LR/Expert-C/Testing/', transform=default_transform)
+    trainset_1_gt = ImageDataset(root='./images_LR/Expert-C/Training1/', transform=transform)
+    trainset_2_gt = ImageDataset(root='./images_LR/Expert-C/Training2/', transform=transform)
+
+    testset_inp = ImageDataset(root='./images_LR/input/Testing/', transform=default_transform)
+    trainset_1_inp = ImageDataset(root='./images_LR/input/Training1/', transform=transform)
+    trainset_2_inp = ImageDataset(root='./images_LR/input/Training2/', transform=transform)
+
+    train_loader_1 = torch.utils.data.DataLoader(
+        ConcatDataset(
+            trainset_1_gt,
+            trainset_1_inp
+        ),
+        batch_size=BATCH_SIZE * GPUS_NUM,  # Enlarge batch_size by a factor of len(device_ids)
+        shuffle=True,
+    )
+
+    train_loader_2 = torch.utils.data.DataLoader(
+        ConcatDataset(
+            trainset_2_gt,
+            trainset_2_inp
+        ),
+        batch_size=BATCH_SIZE * GPUS_NUM,  # Enlarge batch_size by a factor of len(device_ids)
+        shuffle=True,
+    )
+
+    train_loader_cross = torch.utils.data.DataLoader(
+        ConcatDataset(
+            trainset_1_inp,
+            trainset_2_gt
+        ),
+        batch_size=BATCH_SIZE * GPUS_NUM,  # Enlarge batch_size by a factor of len(device_ids)
+        shuffle=True,
+    )
+
+    test_loader = torch.utils.data.DataLoader(
+        ConcatDataset(
+            testset_gt,
+            testset_inp
+        ),
+        batch_size=BATCH_SIZE * GPUS_NUM,  # Enlarge batch_size by a factor of len(device_ids)
+        shuffle=True,
+    )
+    print("Finished loading dataset")
+
+    return train_loader_1, train_loader_2, train_loader_cross, test_loader
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 def data_loader():
     """

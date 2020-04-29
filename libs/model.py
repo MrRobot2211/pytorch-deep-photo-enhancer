@@ -94,7 +94,7 @@ class Generator(nn.Module):
             nn.Conv2d(128, 128, 1, stride=1, padding=0) )
 
         # input 32x32x256 output 32x32x128
-        self.conv7 = nn.Sequential(  nn.ReplicationPad2d(2), 
+        self.conv7 = nn.Sequential(  nn.ReplicationPad2d(1), 
             nn.Conv2d(256, 128, 3, stride=1, padding=0) )
 
         # deconvolutional layers
@@ -174,21 +174,25 @@ class Generator(nn.Module):
         x51 = self.conv51(x4)
 
         # input 16x16x128 to output 8x8x128
-        x52 = self.conv52(x51)
+        x51 = self.conv52(x51)
 
         # input 8x8x128 to output 1x1x128
-        x53 = self.conv53(x52)
+        x53 = self.conv53(x51)
         x53 = self.fc(x53)
 
         # input 32x32x128 to output 32x32x128
         x5 = self.conv6(x4)
 
 
-
-        x53_temp = torch.cat([x53] * x5.shape[2], dim=2)
-        x53_temp = torch.cat([x53_temp] * x5.shape[3], dim=3)
         
-        x53_temp = torch.reshape(x53_temp, (x5.shape[0],-1,x5.shape[2],x5.shape[3]))
+        x53_temp = torch.cat([x53] * 32, dim=2)
+        x53_temp = torch.cat([x53_temp] * 32, dim=3)
+
+
+        #x53_temp = torch.cat([x53] * x5.shape[2], dim=2)
+       # x53_temp = torch.cat([x53_temp] * x5.shape[3], dim=3)
+        
+       # x53_temp = torch.reshape(x53_temp, (x5.shape[0],-1,x5.shape[2],x5.shape[3]))
        
 
        
