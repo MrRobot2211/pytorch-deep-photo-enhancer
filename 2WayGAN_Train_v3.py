@@ -14,6 +14,7 @@ import gc
 #add he ( keras variance scaling ) init with the apropriate weight debug that this is actually initializing all layers ( because of the use of apply)
 #complete loss_wgan_lambda and lambda_grow ...  seting process
 #analize tf_crop_rect
+# add the missing rounding
 clip_value = 1e8 
 D_G_ratio = 50
 
@@ -81,8 +82,8 @@ if __name__ == "__main__":
     optimizer_g = optim.Adam(itertools.chain(generatorX.parameters(), generatorY.parameters()), lr=LEARNING_RATE, betas=(BETA1, BETA2))
     optimizer_d = optim.Adam(itertools.chain(discriminatorY.parameters(),discriminatorX.parameters()), lr=LEARNING_RATE, betas=(BETA1, BETA2))
 
-    scheduler_g = torch.optim.lr_scheduler.StepLR(optimizer_g,70,1e-1)
-    scheduler_d = torch.optim.lr_scheduler.StepLR(optimizer_d,70,1e-1)
+    scheduler_g = torch.optim.lr_scheduler.StepLR(optimizer_g,70,1e-2)
+    scheduler_d = torch.optim.lr_scheduler.StepLR(optimizer_d,70,1e-2)
 
     LambdaAdapt = LambdaAdapter(LAMBDA,D_G_ratio)
 
@@ -176,32 +177,29 @@ if __name__ == "__main__":
 
             if batches_done % 500 == 0:
                 # Training Network
-                dataiter = iter(testLoader)
-                gt_test, data_test = dataiter.next()
-                input_test, maskInput_test = data_test
-                Testgt, maskEnhanced_test = gt_test
-
-                maskInput = Variable(maskInput_test.type(Tensor_gpu)) 
-                maskEnhanced = Variable(maskEnhanced_test.type(Tensor_gpu)) 
-
-                
-                realInput_test = Variable(input_test.type(Tensor_gpu))
-                realEnhanced_test = Variable(Testgt.type(Tensor_gpu))
+                psnr=0
+                generatorX.eval()
                 with torch.no_grad():
-                    psnrAvg = 0.0
-                    for k in range(0, realInput_test.data.shape[0]):
-                        save_image(realInput_test.data[k], "./models/train_images/2Way/2Way_Train_%d_%d_%d.png" % (epoch+1, batches_done+1, k+1),
-                                    nrow=1,
-                                    normalize=True)
-                    torch.save(generatorX.state_dict(),
-                                './models/train_checkpoint/2Way/gan2_train_' + str(epoch) + '_' + str(i) + '.pth')
-                    torch.save(discriminatorY.state_dict(),
-                                './models/train_checkpoint/2Way/discriminator2_train_' + str(epoch) + '_' + str(i) + '.pth')
-                    fakeEnhanced_test = generatorX(realInput_test)
-                    test_loss = criterion( realEnhanced_test*maskEnhanced,fakeEnhanced_test*maskInput  )
-                     
-                    psnr = 10 * torch.log10(1 / test_loss)
-                    psnrAvg = psnr.mean()
+                    for j, (data_t, gt1_t) in enumerate(testLoader, 0):
+
+                       
+                        input_test, maskInput_test = data_t
+                        Testgt, maskEnhanced_test = gt1_t
+
+                        maskInput = Variable(maskInput_test.type(Tensor_gpu)) 
+                        maskEnhanced = Variable(maskEnhanced_test.type(Tensor_gpu)) 
+
+                        
+                        realInput_test = Variable(input_test.type(Tensor_gpu))
+                        realEnhanced_test = Variable(Testgt.type(Tensor_gpu))
+
+                        
+                        
+                        fakeEnhanced_test = generatorX(realInput_test)
+                        test_loss = criterion( realEnhanced_test*maskEnhanced,fakeEnhanced_test*maskInput  )
+                        #psnr is okey because answers are from zero to one...we should check clamping in between (?)
+                        psnr = psnr + 10 * torch.log10(1 / (test_loss))
+                    psnrAvg = psnr/(j+1)
 
                     print("Loss loss: %f" % test_loss)
                     print("PSNR Avg: %f" % (psnrAvg ))
@@ -209,17 +207,40 @@ if __name__ == "__main__":
                     f.write("PSNR Avg: %f" % (psnrAvg ))
                     f.close()
 
+                    for k in range(0, realInput_test.data.shape[0]):
+                        save_image(realInput_test.data[k], "./models/train_images/2Way/2Way_Train_%d_%d_%d.png" % (epoch+1, batches_done+1, k+1),
+                                    nrow=1,
+                                    normalize=True)
+                    if GPUS_NUM >1:
+                        torch.save(generatorX.module.state_dict(),
+                                    './models/train_checkpoint/2Way/gan2_train_' + str(epoch) + '_' + str(i) + '.pth')
+
+
+                        torch.save(discriminatorY.module.state_dict(),
+                                    './models/train_checkpoint/2Way/discriminator2_train_' + str(epoch) + '_' + str(i) + '.pth')
+
+                    
+                    else:
+                        torch.save(generatorX.state_dict(),
+                                    './models/train_checkpoint/2Way/gan2_train_' + str(epoch) + '_' + str(i) + '.pth')
+
+
+                        torch.save(discriminatorY.state_dict(),
+                                    './models/train_checkpoint/2Way/discriminator2_train_' + str(epoch) + '_' + str(i) + '.pth')
+
                     for k in range(0, fakeEnhanced_test.data.shape[0]):
                         save_image(fakeEnhanced_test.data[k],
                                     "./models/train_test_images/2Way/2Way_Train_Test_%d_%d_%d.png" % (epoch, batches_done, k),
                                     nrow=1, normalize=True)
                     
-                del fakeEnhanced_test ,realEnhanced_test , realInput_test,  gt_test, data_test, dataiter,maskInput_test,maskEnhanced_test ,Testgt, input_test, test_loss
+                del fakeEnhanced_test ,realEnhanced_test , realInput_test,  gt1_t, data_t,maskInput_test,maskEnhanced_test ,Testgt, input_test, test_loss
                 
                 if torch.cuda.is_available() :   
                     torch.cuda.empty_cache()
                 else:
                     gc.collect()
+
+                generatorX.trrain()
             
             set_requires_grad([discriminatorY,discriminatorX], True)
 
@@ -282,7 +303,7 @@ if __name__ == "__main__":
     Testgt, dummy = gt_test
     with torch.no_grad():
         psnrAvg = 0.0
-        for j, (gt, data) in enumerate(testLoader, 0):
+        for j, (data, gt) in enumerate(testLoader, 0):
             input, dummy = data
             groundTruth, dummy = gt
             trainInput = Variable(input.type(Tensor_gpu))

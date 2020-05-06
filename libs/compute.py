@@ -9,6 +9,7 @@ from torchvision.datasets import ImageFolder
 import albumentations as albu
 from albumentations import torch as AT
 import pandas as pd
+from libs.custom_transforms import PadDifferentlyIfNeeded
 from libs.constant import *
 from libs.model import *
 
@@ -77,11 +78,11 @@ def data_loader_mask():
     # you can add other transformations in this list
    # transforms.CenterCrop(512),
    # transforms.ToTensor()  ])
-    default_transform = albu.Compose([ albu.PadIfNeeded(512,512,cv2.BORDER_CONSTANT,value=0,mask_value=0)
+    default_transform = albu.Compose([ PadDifferentlyIfNeeded(512,512,mask_value=0)
     , AT.ToTensor()])
   
-    transform = albu.Compose([ albu.PadIfNeeded(512,512,cv2.BORDER_CONSTANT,value=0,mask_value=0), albu.Rotate()
-    , AT.ToTensor()])
+    transform = albu.Compose([  albu.Rotate(15)
+    ,PadDifferentlyIfNeeded(512,512,mask_value=0), AT.ToTensor()])
   
     testset_gt = ImageDataset(root='./images_LR/Expert-C/Testing/', transform=default_transform)
     trainset_1_gt = ImageDataset(root='./images_LR/Expert-C/Training1/', transform=transform)
@@ -120,11 +121,12 @@ def data_loader_mask():
 
     test_loader = torch.utils.data.DataLoader(
         ConcatDataset(
-            testset_gt,
-            testset_inp
+           
+            testset_inp,
+            testset_gt
         ),
         batch_size=BATCH_SIZE * GPUS_NUM,  # Enlarge batch_size by a factor of len(device_ids)
-        shuffle=True,
+        shuffle=False
     )
     print("Finished loading dataset")
 
@@ -194,8 +196,8 @@ def data_loader():
 
     test_loader = torch.utils.data.DataLoader(
         ConcatDataset(
-            testset_gt,
-            testset_inp
+            testset_inp,
+            testset_gt
         ),
         batch_size=BATCH_SIZE * GPUS_NUM,  # Enlarge batch_size by a factor of len(device_ids)
         shuffle=True,
