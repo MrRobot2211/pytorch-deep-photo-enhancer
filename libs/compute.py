@@ -84,32 +84,15 @@ def data_loader_mask():
     transform = albu.Compose([  albu.Rotate(15)
     ,PadDifferentlyIfNeeded(512,512,mask_value=0), AT.ToTensor()])
   
-    testset_gt = ImageDataset(root='./images_LR/Expert-C/Testing/', transform=default_transform)
-    trainset_1_gt = ImageDataset(root='./images_LR/Expert-C/Training1/', transform=transform)
-    trainset_2_gt = ImageDataset(root='./images_LR/Expert-C/Training2/', transform=transform)
+    testset_gt = ImageDataset(root=TEST_ENHANCED_IMG_DIR , transform=default_transform)
+    trainset_1_gt = ImageDataset(root=ENHANCED_IMG_DIR, transform=transform)
+    trainset_2_gt = ImageDataset(root=ENHANCED2_IMG_DIR, transform=transform)
 
-    testset_inp = ImageDataset(root='./images_LR/input/Testing/', transform=default_transform)
-    trainset_1_inp = ImageDataset(root='./images_LR/input/Training1/', transform=transform)
-    trainset_2_inp = ImageDataset(root='./images_LR/input/Training2/', transform=transform)
+    testset_inp = ImageDataset(root=TEST_INPUT_IMG_DIR , transform=default_transform)
+    trainset_1_inp = ImageDataset(root=INPUT_IMG_DIR , transform=transform)
+    trainset_2_inp = ImageDataset(root=INPUT2_IMG_DIR, transform=transform)
 
-    train_loader_1 = torch.utils.data.DataLoader(
-        ConcatDataset(
-            trainset_1_gt,
-            trainset_1_inp
-        ),
-        batch_size=BATCH_SIZE * GPUS_NUM,  # Enlarge batch_size by a factor of len(device_ids)
-        shuffle=True,
-    )
-
-    train_loader_2 = torch.utils.data.DataLoader(
-        ConcatDataset(
-            trainset_2_gt,
-            trainset_2_inp
-        ),
-        batch_size=BATCH_SIZE * GPUS_NUM,  # Enlarge batch_size by a factor of len(device_ids)
-        shuffle=True,
-    )
-
+   
     train_loader_cross = torch.utils.data.DataLoader(
         ConcatDataset(
             trainset_1_inp,
@@ -130,7 +113,7 @@ def data_loader_mask():
     )
     print("Finished loading dataset")
 
-    return train_loader_1, train_loader_2, train_loader_cross, test_loader
+    return  train_loader_cross, test_loader
 
 
 

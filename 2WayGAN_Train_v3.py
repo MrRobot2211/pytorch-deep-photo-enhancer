@@ -8,6 +8,8 @@ from libs.constant import *
 from libs.model import *
 import gc
 
+import tensorboardX  
+
 # we are missing weight decayed specified in the original as regularization loss
 # add cipping the equivalent to tf.clip_by_value  to  torch.clamp(input, 0 , 1 ) !!!!!!verify that we only clamp when applying the inverse!!!!!!!
 #add gradient clipping FLAGS['net_gradient_clip_value'] = 1e8    torch.nn.utils.clip_grad_value_
@@ -22,13 +24,15 @@ if __name__ == "__main__":
 
     start_time = datetime.now()
 
+    writer1 = tensorboardX.SummaryWriter('./runs/exp-1')
+
     # Creating generator and discriminator
     generatorX = Generator()
   
     
 
     #generatorX.load_state_dict(torch.load('./gan1_pretrain_100_14.pth', map_location=device))
-    init_net(generatorX,'normal')
+    init_net(generatorX,'xavier')
     
 
     generatorX_ = Generator_(generatorX)
@@ -41,7 +45,7 @@ if __name__ == "__main__":
     generatorX.train()
 
     generatorY = Generator()
-    init_net(generatorY,'normal')
+    init_net(generatorY,'xavier')
     
     #generatorY.load_state_dict(torch.load('./gan1_pretrain_100_14.pth', map_location=device))
     generatorY_ = Generator_(generatorY)
@@ -74,7 +78,7 @@ if __name__ == "__main__":
         discriminatorX.cuda(device=device)
 
     # Loading Training and Test Set Data
-    trainLoader1, trainLoader2, trainLoader_cross, testLoader = data_loader_mask()
+    trainLoader_cross, testLoader = data_loader_mask()
 
     # MSE Loss and Optimizer
     criterion = nn.MSELoss()
@@ -137,11 +141,11 @@ if __name__ == "__main__":
                 
                 
                 # TRAIN GENERATOR
-                generatorX.zero_grad()
+                #generatorX.zero_grad()
 
-                generatorY.zero_grad()
+                #generatorY.zero_grad()
 
-
+                optimizer_g.zero_grad()
                
 
                 ag = compute_g_adv_loss(discriminatorY,discriminatorX, fakeEnhanced,fakeInput)
@@ -206,6 +210,7 @@ if __name__ == "__main__":
                     f = open("./models/psnr_Score_trailing.txt", "a+")
                     f.write("PSNR Avg: %f" % (psnrAvg ))
                     f.close()
+                    writer1.add_scalar('PSNR test',psnrAvg,batches_done)
 
                     for k in range(0, realInput_test.data.shape[0]):
                         save_image(realInput_test.data[k], "./models/train_images/2Way/2Way_Train_%d_%d_%d.png" % (epoch+1, batches_done+1, k+1),
@@ -240,15 +245,15 @@ if __name__ == "__main__":
                 else:
                     gc.collect()
 
-                generatorX.trrain()
+                generatorX.train()
             
             set_requires_grad([discriminatorY,discriminatorX], True)
 
             # TRAIN DISCRIMINATOR
-            discriminatorX.zero_grad()
-            discriminatorY.zero_grad()
-
-            
+           # discriminatorX.zero_grad()
+           # discriminatorY.zero_grad()
+            optimizer_d.zero_grad()
+           
             
             #computing losses
             #ad, ag = computeAdversarialLosses(discriminatorY,discriminatorX, trainInput, x1, realImgs, fake_imgs)
@@ -286,6 +291,9 @@ if __name__ == "__main__":
             print("[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f] [ad loss: %f]  [gp1 loss: %f] [gp2 loss: %f][wp1 loss: %f] [wp2 loss: %f]" % (
                 epoch + 1, NUM_EPOCHS_TRAIN, i + 1, len(trainLoader_cross), d_loss.item(), g_loss.item(),
                  ad,gradient_penalty1,gradient_penalty2,LambdaAdapt.netD_gp_weight_1,LambdaAdapt.netD_gp_weight_2 ))
+
+            writer1.add_scalars("losses", {'D loss':d_loss.item(), 'G loss':g_loss.item(),
+                'ad loss':ad, 'gp1 loss':gradient_penalty1,'gp2 loss':gradient_penalty2,'weight pen 1':LambdaAdapt.netD_gp_weight_1,'weight pen 2':LambdaAdapt.netD_gp_weight_2 }, batches_done)
             
 
             f = open("./models/log_Train.txt", "a+")

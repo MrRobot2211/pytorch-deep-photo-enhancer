@@ -28,7 +28,7 @@ class GeneratorWDilation(nn.Module):
         #  Convolutional layers
         # input 512x512x3  output 512x512x16
         self.conv1 = nn.Sequential(
-            nn.ReplicationPad2d(2),
+            nn.ReflectionPad2d(2),
             nn.Conv2d(3, 16, 5, stride=1, padding=0,dilation = dilation),
             nn.SELU(inplace=True),
             nn.InstanceNorm2d(16)
@@ -36,7 +36,7 @@ class GeneratorWDilation(nn.Module):
 
         # input 512x512x16  output 256x256x32
         self.conv2 = nn.Sequential(
-            nn.ReplicationPad2d(2),
+            nn.ReflectionPad2d(2),
             nn.Conv2d(16, 32, 5, stride=2, padding=0,dilation = dilation),
             nn.SELU(inplace=True),
             nn.InstanceNorm2d(32)
@@ -44,7 +44,7 @@ class GeneratorWDilation(nn.Module):
 
         # input 256x256x32  output 128x128x64
         self.conv3 = nn.Sequential(
-            nn.ReplicationPad2d(2),
+            nn.ReflectionPad2d(2),
             nn.Conv2d(32, 64, 5, stride=2, padding=0,dilation = dilation),
             nn.SELU(inplace=True),
             nn.InstanceNorm2d(64)
@@ -52,7 +52,7 @@ class GeneratorWDilation(nn.Module):
 
         # input 128x128x64  output 64x64x128
         self.conv4 = nn.Sequential(
-            nn.ReplicationPad2d(2),
+            nn.ReflectionPad2d(2),
             nn.Conv2d(64, 128, 5, stride=2, padding=0,dilation = dilation),
             nn.SELU(inplace=True),
             nn.InstanceNorm2d(128)
@@ -61,7 +61,7 @@ class GeneratorWDilation(nn.Module):
         # input 64x64x128  output 32x32x128
         # the output of this layer we need layers for global features
         self.conv5 = nn.Sequential(
-            nn.ReplicationPad2d(2),
+            nn.ReflectionPad2d(2),
             nn.Conv2d(128, 128, 5, stride=2, padding=0,dilation = dilation),
             nn.SELU(inplace=True),
             nn.InstanceNorm2d(128)
@@ -70,12 +70,12 @@ class GeneratorWDilation(nn.Module):
         # convs for global features
         # input 32x32x128 output 16x16x128
         self.conv51 = nn.Sequential(
-            nn.ReplicationPad2d(2), 
+            nn.ReflectionPad2d(2), 
             nn.Conv2d(128, 128, 5, stride=2, padding=0,dilation = dilation))
 
         # input 16x16x128 output 8x8x128
         self.conv52 = nn.Sequential(
-            nn.ReplicationPad2d(2),
+            nn.ReflectionPad2d(2),
             nn.Conv2d(128, 128, 5, stride=2, padding=0,dilation = dilation))
 
         # input 8x8x128 output 1x1x128
@@ -99,7 +99,7 @@ class GeneratorWDilation(nn.Module):
             nn.Conv2d(128, 128, 1, stride=1, padding=0,dilation = dilation) )
 
         # input 32x32x256 output 32x32x128
-        self.conv7 = nn.Sequential(  nn.ReplicationPad2d(1), 
+        self.conv7 = nn.Sequential(  nn.ReflectionPad2d(1), 
             nn.Conv2d(256, 128, 3, stride=1, padding=0,dilation = dilation) )
 
         # deconvolutional layers
@@ -107,7 +107,7 @@ class GeneratorWDilation(nn.Module):
         self.dconv1 = nn.Sequential(
             nn.SELU(inplace=True),
             nn.InstanceNorm2d(128),
-            nn.ReplicationPad2d(1),
+            nn.ReflectionPad2d(1),
             nn.Conv2d(128, 128, 3, stride=1, padding=0,dilation = dilation),
             nn.Upsample(scale_factor=2,  mode='nearest') 
         )
@@ -117,7 +117,7 @@ class GeneratorWDilation(nn.Module):
             nn.SELU(inplace=True),
             nn.InstanceNorm2d(256),
            
-            nn.ReplicationPad2d(1),
+            nn.ReflectionPad2d(1),
 
             nn.Conv2d(256, 128, 3, stride=1, padding=0,dilation = dilation),
             nn.Upsample(scale_factor=2, mode='nearest')
@@ -127,7 +127,7 @@ class GeneratorWDilation(nn.Module):
         self.dconv3 = nn.Sequential(
             nn.SELU(inplace=True),
             nn.InstanceNorm2d(192),
-            nn.ReplicationPad2d(1),
+            nn.ReflectionPad2d(1),
             nn.Conv2d(192, 64, 3, stride=1, padding=0,dilation = dilation),
             nn.Upsample(scale_factor=2, mode='nearest')
         )
@@ -136,7 +136,7 @@ class GeneratorWDilation(nn.Module):
         self.dconv4 = nn.Sequential(
             nn.SELU(inplace=True),
             nn.InstanceNorm2d(96),
-            nn.ReplicationPad2d(1),
+            nn.ReflectionPad2d(1),
             nn.Conv2d(96, 32, 3, stride=1, padding=0,dilation = dilation),
             nn.Upsample(scale_factor=2, mode='nearest')
         )
@@ -146,7 +146,7 @@ class GeneratorWDilation(nn.Module):
         self.conv8 = nn.Sequential(
             nn.SELU(inplace=True),
             nn.InstanceNorm2d(48),
-            #nn.ReplicationPad2d(1),
+            #nn.ReflectionPad2d(1),
             nn.Conv2d(48, 16, 1, stride=1, padding=0,dilation = dilation)
         )
 
@@ -154,7 +154,7 @@ class GeneratorWDilation(nn.Module):
         self.conv9 = nn.Sequential(
             nn.SELU(inplace=True),
             nn.InstanceNorm2d(16),
-            #nn.ReplicationPad2d(1),
+            #nn.ReflectionPad2d(1),
             nn.Conv2d(16, 3, 1, stride=1, padding=0,dilation = dilation)
         )
 
@@ -317,7 +317,7 @@ class GeneratorWDilationamp(nn.Module):
         # Residuals
         xd = xd + x
         return xd
-
+#nn.ReflectionPad2d
 def build_conv_correction(generator,layer_name,rate):
     layer = getattr(generator,layer_name)
     #should check if it is conv and shod check for order, not all modules respect the same order
@@ -367,13 +367,13 @@ def build_conv_correction(generator,layer_name,rate):
                 new_modules.append(module)    
         final_modules=[]
         for module in new_modules :
-
-            if  isinstance(module,nn.ReplicationPad2d) :
+            #nn.ReplicationPad2d
+            if  isinstance(module,nn.ReflectionPad2d) :
                
                 
                 pad_size = rate * (kernel - 1) // 2
 
-                final_modules.append(nn.ReplicationPad2d(pad_size))
+                final_modules.append(nn.ReflectionPad2d(pad_size))
             
             else:
                 final_modules.append(module)   

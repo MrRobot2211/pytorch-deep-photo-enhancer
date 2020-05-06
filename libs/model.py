@@ -23,7 +23,7 @@ class Generator(nn.Module):
         #  Convolutional layers
         # input 512x512x3  output 512x512x16
         self.conv1 = nn.Sequential(
-            nn.ReplicationPad2d(2),
+            nn.ReflectionPad2d(2),
             nn.Conv2d(3, 16, 5, stride=1, padding=0),
             nn.SELU(inplace=True),
             nn.InstanceNorm2d(16)
@@ -31,7 +31,7 @@ class Generator(nn.Module):
 
         # input 512x512x16  output 256x256x32
         self.conv2 = nn.Sequential(
-            nn.ReplicationPad2d(2),
+            nn.ReflectionPad2d(2),
             nn.Conv2d(16, 32, 5, stride=2, padding=0),
             nn.SELU(inplace=True),
             nn.InstanceNorm2d(32)
@@ -39,7 +39,7 @@ class Generator(nn.Module):
 
         # input 256x256x32  output 128x128x64
         self.conv3 = nn.Sequential(
-            nn.ReplicationPad2d(2),
+            nn.ReflectionPad2d(2),
             nn.Conv2d(32, 64, 5, stride=2, padding=0),
             nn.SELU(inplace=True),
             nn.InstanceNorm2d(64)
@@ -47,7 +47,7 @@ class Generator(nn.Module):
 
         # input 128x128x64  output 64x64x128
         self.conv4 = nn.Sequential(
-            nn.ReplicationPad2d(2),
+            nn.ReflectionPad2d(2),
             nn.Conv2d(64, 128, 5, stride=2, padding=0),
             nn.SELU(inplace=True),
             nn.InstanceNorm2d(128)
@@ -56,7 +56,7 @@ class Generator(nn.Module):
         # input 64x64x128  output 32x32x128
         # the output of this layer we need layers for global features
         self.conv5 = nn.Sequential(
-            nn.ReplicationPad2d(2),
+            nn.ReflectionPad2d(2),
             nn.Conv2d(128, 128, 5, stride=2, padding=0),
             nn.SELU(inplace=True),
             nn.InstanceNorm2d(128)
@@ -65,12 +65,12 @@ class Generator(nn.Module):
         # convs for global features
         # input 32x32x128 output 16x16x128
         self.conv51 = nn.Sequential(
-            nn.ReplicationPad2d(2), 
+            nn.ReflectionPad2d(2), 
             nn.Conv2d(128, 128, 5, stride=2, padding=0))
 
         # input 16x16x128 output 8x8x128
         self.conv52 = nn.Sequential(
-            nn.ReplicationPad2d(2),
+            nn.ReflectionPad2d(2),
             nn.Conv2d(128, 128, 5, stride=2, padding=0))
 
         # input 8x8x128 output 1x1x128
@@ -94,7 +94,7 @@ class Generator(nn.Module):
             nn.Conv2d(128, 128, 1, stride=1, padding=0) )
 
         # input 32x32x256 output 32x32x128
-        self.conv7 = nn.Sequential(  nn.ReplicationPad2d(1), 
+        self.conv7 = nn.Sequential(  nn.ReflectionPad2d(1), 
             nn.Conv2d(256, 128, 3, stride=1, padding=0) )
 
         # deconvolutional layers
@@ -102,7 +102,7 @@ class Generator(nn.Module):
         self.dconv1 = nn.Sequential(
             nn.SELU(inplace=True),
             nn.InstanceNorm2d(128),
-            nn.ReplicationPad2d(1),
+            nn.ReflectionPad2d(1),
             nn.Conv2d(128, 128, 3, stride=1, padding=0),
             nn.Upsample(scale_factor=2,  mode='nearest') 
         )
@@ -112,7 +112,7 @@ class Generator(nn.Module):
             nn.SELU(inplace=True),
             nn.InstanceNorm2d(256),
            
-            nn.ReplicationPad2d(1),
+            nn.ReflectionPad2d(1),
 
             nn.Conv2d(256, 128, 3, stride=1, padding=0),
             nn.Upsample(scale_factor=2, mode='nearest')
@@ -122,7 +122,7 @@ class Generator(nn.Module):
         self.dconv3 = nn.Sequential(
             nn.SELU(inplace=True),
             nn.InstanceNorm2d(192),
-            nn.ReplicationPad2d(1),
+            nn.ReflectionPad2d(1),
             nn.Conv2d(192, 64, 3, stride=1, padding=0),
             nn.Upsample(scale_factor=2, mode='nearest')
         )
@@ -131,7 +131,7 @@ class Generator(nn.Module):
         self.dconv4 = nn.Sequential(
             nn.SELU(inplace=True),
             nn.InstanceNorm2d(96),
-            nn.ReplicationPad2d(1),
+            nn.ReflectionPad2d(1),
             nn.Conv2d(96, 32, 3, stride=1, padding=0),
             nn.Upsample(scale_factor=2, mode='nearest')
         )
@@ -141,7 +141,7 @@ class Generator(nn.Module):
         self.conv8 = nn.Sequential(
             nn.SELU(inplace=True),
             nn.InstanceNorm2d(48),
-            #nn.ReplicationPad2d(1),
+            #nn.ReflectionPad2d(1),
             nn.Conv2d(48, 16, 1, stride=1, padding=0)
         )
 
@@ -149,7 +149,7 @@ class Generator(nn.Module):
         self.conv9 = nn.Sequential(
             nn.SELU(inplace=True),
             nn.InstanceNorm2d(16),
-            #nn.ReplicationPad2d(1),
+            #nn.ReflectionPad2d(1),
             nn.Conv2d(16, 3, 1, stride=1, padding=0)
         )
 
@@ -330,7 +330,7 @@ class Discriminator(nn.Module):
         #  Convolutional layers
         # input 512x512x3  output 512x512x16
         self.conv1 = nn.Sequential(
-            nn.ReplicationPad2d(2),
+            nn.ReflectionPad2d(2),
             nn.Conv2d(3, 16,kernel_size= 3, stride=1, padding=0),
             nn.LeakyReLU(0.2,inplace=True),
             nn.InstanceNorm2d(16)
@@ -338,7 +338,7 @@ class Discriminator(nn.Module):
 
         # input 512x512x16  output 256x256x32
         self.conv2 = nn.Sequential(
-            nn.ReplicationPad2d(2),
+            nn.ReflectionPad2d(2),
             nn.Conv2d(16, 32, 5, stride=2, padding=0),
             nn.LeakyReLU(0.2,inplace=True),
             nn.InstanceNorm2d(32)
@@ -346,7 +346,7 @@ class Discriminator(nn.Module):
 
         # input 256x256x32  output 128x128x64
         self.conv3 = nn.Sequential(
-            nn.ReplicationPad2d(2),
+            nn.ReflectionPad2d(2),
             nn.Conv2d(32, 64, 5, stride=2, padding=0),
             nn.LeakyReLU(0.2,inplace=True),
             nn.InstanceNorm2d(64)
@@ -354,7 +354,7 @@ class Discriminator(nn.Module):
 
         # input 128x128x64  output 64x64x128
         self.conv4 = nn.Sequential(
-            nn.ReplicationPad2d(2),
+            nn.ReflectionPad2d(2),
             nn.Conv2d(64, 128, 5, stride=2, padding=0),
             nn.LeakyReLU(0.2,inplace=True),
             nn.InstanceNorm2d(128)
@@ -363,7 +363,7 @@ class Discriminator(nn.Module):
         # input 64x64x128  output 32x32x128
         # the output of this layer we need layers for global features
         self.conv5 = nn.Sequential(
-            nn.ReplicationPad2d(2),
+            nn.ReflectionPad2d(2),
             nn.Conv2d(128, 128, 5, stride=2, padding=0),
             nn.LeakyReLU(0.2,inplace=True),
             nn.InstanceNorm2d(128)
@@ -372,7 +372,7 @@ class Discriminator(nn.Module):
         # input 32x32x128  output 16x16x128
         # the output of this layer we need layers for global features
         self.conv6 = nn.Sequential(
-            nn.ReplicationPad2d(2),
+            nn.ReflectionPad2d(2),
             nn.Conv2d(128, 128, 5, stride=2, padding=0),
             nn.LeakyReLU(inplace=True),
             nn.InstanceNorm2d(128)
@@ -446,10 +446,10 @@ def init_weights(net, init_type='normal', init_gain=0.02):
         if hasattr(m, 'weight') and (classname.find('Conv') != -1 or classname.find('Linear') != -1):
             if init_type == 'normal':
                 init.normal_(m.weight.data, 0.0, init_gain)
-            elif init_type == 'xavier':
+            elif init_type == 'xavier': 
                 init.xavier_normal_(m.weight.data, gain=init_gain)
             elif init_type == 'kaiming':
-                init.kaiming_normal_(m.weight.data, a= 1e-3, mode='fan_in')
+                init.kaiming_normal_(m.weight.data, a=0.2, mode='fan_in')
                 #init.kaiming_normal_(m.weight.data, a= 1e-7, mode='fan_in')
             elif init_type == 'orthogonal':
                 init.orthogonal_(m.weight.data, gain=init_gain)
@@ -465,7 +465,7 @@ def init_weights(net, init_type='normal', init_gain=0.02):
     net.apply(init_func)  # apply the initialization function <init_func>
 
 
-def init_net(net, init_type='kaiming', init_gain=0.0006, gpu_ids=[]):
+def init_net(net, init_type='kaiming', init_gain=0.001, gpu_ids=[]):
     """Initialize a network: 1. register CPU/GPU device (with multi-GPU support); 2. initialize the network weights
     Parameters:
         net (network)      -- the network to be initialized

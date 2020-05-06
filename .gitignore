@@ -3,3 +3,4 @@
 /models/*
 /libs/__pycache__/*
 /temp/*
+/runs/*
