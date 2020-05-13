@@ -29,6 +29,12 @@ Expert-C on [MIT-Adobe FiveK dataset](https://data.csail.mit.edu/graphics/fivek/
 
 1. All hyperparameters are in `libs\constant.py`
 
+
+All this extra foders are created by calling
+
+```python directory_strcture.py```
+
+
 2. There are some folders need to be created, to do that just call python directory_structure.py:
    1. `images_LR`：Used to store datasets
       1. `Expert-C`
@@ -53,123 +59,28 @@ Expert-C on [MIT-Adobe FiveK dataset](https://data.csail.mit.edu/graphics/fivek/
 
 ## Training
 
-1. If you don't have a pretrain module, the first thing you need to do is runing "1WayGAN_PreTrain.py":
-   `python 1WayGAN_PreTrain.py`
-2. The last generated `\models\pretrain_checkpoint\gan1_pretrain_xxx_xxx.pth` should be placed in the root directory, like "gan1_pretrain_100_113.pth" in my repository.
-3. Next you need to change the line 15 in “1WayGAN_Train.py” or the same line in “2WayGAN_Train.py”.  To train the model, please run this command:
-   ```python
-   # Only if you want to use 1 way Gan
-   python 1WayGAN_Train.py
-   # Only if you want to use 2 way Gan
-   python 2WayGAN_Train.py
-   ```
+1. 1. `images_LR/input/Training1 ` should contain folders containing images you want to correct.
+   2. `images_LR/Expert-C/Training2 ` should contain folders containing  the images of the type you want to obtain.
+   3. `images_LR/input/Testing ` `images_LR/Expert-C/Testing ` should contain folders containing the images to get the test scores. In the former you should put the 'bad' sample and on the latter the 'good' sample of the same image 
+
+2. Run the following line to get all the images to max_size 512 ...change the commented directoies as needed
+```python reize.py ```
+
+3. Run for training   
+
+```python 2WayGAN_Train_v3.py ```
 
 ## Evaluation
 
 For now, the evaluation and training are simultaneous. So there is no need to run anything.
 
-To evaluate my modle, I use PSNR in “XWayGAN_Train.py”
+To evaluate my model, I use PSNR in “XWayGAN_Train.py”
 
-## Results
+## Inference
+This is inference for general ized images, it may be improved by using a loader.
 
-<style type="text/css">
-.tg  {border-collapse:collapse;border-spacing:0;}
-.tg td{font-family:Arial, sans-serif;font-size:14px;padding:10px 5px;border-style:solid;border-width:1px;overflow:hidden;word-break:normal;border-color:black;}
-.tg th{font-family:Arial, sans-serif;font-size:14px;font-weight:normal;padding:10px 5px;border-style:solid;border-width:1px;overflow:hidden;word-break:normal;border-color:black;}
-.tg .tg-18eh{font-weight:bold;border-color:#000000;text-align:center;vertical-align:middle}
-.tg .tg-wp8o{border-color:#000000;text-align:center;vertical-align:top}
-.tg .tg-xwyw{border-color:#000000;text-align:center;vertical-align:middle}
-.tg .tg-mqa1{font-weight:bold;border-color:#000000;text-align:center;vertical-align:top}
-</style>
-<table class="tg">
-  <tr>
-    <th class="tg-xwyw"></th>
-    <th class="tg-mqa1"></th>
-    <th class="tg-mqa1">1Way GAN</th>
-    <th class="tg-mqa1">2Way GAN</th>
-    <th class="tg-18eh">BATCH_SIZE</th>
-    <th class="tg-18eh">NUM_EPOCHS_PRETRAIN</th>
-    <th class="tg-18eh">NUM_EPOCHS_TRAIN</th>
-    <th class="tg-18eh">Discriminator Loss</th>
-    <th class="tg-18eh">Generator Loss</th>
-    <th class="tg-18eh">PSNR</th>
-    <th class="tg-18eh">Time</th>
-  </tr>
-  <tr>
-    <td class="tg-18eh" rowspan="3">Pretrain</td>
-    <td class="tg-wp8o">1</td>
-    <td class="tg-wp8o">\</td>
-    <td class="tg-wp8o">\</td>
-    <td class="tg-xwyw"></td>
-    <td class="tg-xwyw"></td>
-    <td class="tg-xwyw"></td>
-    <td class="tg-xwyw">\</td>
-    <td class="tg-xwyw"></td>
-    <td class="tg-xwyw">\</td>
-    <td class="tg-xwyw">3H55M</td>
-  </tr>
-  <tr>
-    <td class="tg-wp8o">2</td>
-    <td class="tg-wp8o">\</td>
-    <td class="tg-wp8o">\</td>
-    <td class="tg-xwyw"></td>
-    <td class="tg-xwyw"></td>
-    <td class="tg-xwyw"></td>
-    <td class="tg-xwyw">\</td>
-    <td class="tg-xwyw"></td>
-    <td class="tg-xwyw">\</td>
-    <td class="tg-xwyw">8H45M</td>
-  </tr>
-  <tr>
-    <td class="tg-wp8o">3</td>
-    <td class="tg-wp8o">\</td>
-    <td class="tg-wp8o">\</td>
-    <td class="tg-wp8o"></td>
-    <td class="tg-wp8o"></td>
-    <td class="tg-wp8o"></td>
-    <td class="tg-wp8o">\</td>
-    <td class="tg-wp8o"></td>
-    <td class="tg-wp8o">\</td>
-    <td class="tg-wp8o">9H25M</td>
-  </tr>
-  <tr>
-    <td class="tg-18eh" rowspan="3">Train</td>
-    <td class="tg-wp8o">1</td>
-    <td class="tg-wp8o">√</td>
-    <td class="tg-wp8o"></td>
-    <td class="tg-xwyw"></td>
-    <td class="tg-xwyw"></td>
-    <td class="tg-xwyw"></td>
-    <td class="tg-xwyw"></td>
-    <td class="tg-xwyw"></td>
-    <td class="tg-xwyw"></td>
-    <td class="tg-xwyw">2H45M</td>
-  </tr>
-  <tr>
-    <td class="tg-wp8o">2</td>
-    <td class="tg-wp8o"></td>
-    <td class="tg-wp8o">√</td>
-    <td class="tg-xwyw"></td>
-    <td class="tg-xwyw"></td>
-    <td class="tg-xwyw"></td>
-    <td class="tg-xwyw"></td>
-    <td class="tg-xwyw"></td>
-    <td class="tg-xwyw"></td>
-    <td class="tg-xwyw">5H38M</td>
-  </tr>
-  <tr>
-    <td class="tg-wp8o">3</td>
-    <td class="tg-wp8o"></td>
-    <td class="tg-wp8o">√</td>
-    <td class="tg-wp8o"></td>
-    <td class="tg-wp8o"></td>
-    <td class="tg-wp8o"></td>
-    <td class="tg-wp8o"></td>
-    <td class="tg-wp8o"></td>
-    <td class="tg-wp8o"></td>
-    <td class="tg-wp8o">4H45M</td>
-  </tr>
-</table>
+```python unbounded_inference.py --generator_model 'gan2_train_28_40.pth' --input_image 'input_image' --output_image  'output_image' ```
+
 
 ## Problem
 
@@ -182,15 +93,10 @@ This repo is released under  the [MIT License](LICENSE.md)
 
 ## Contributor
 
-For now, This repo is maintained by Zhiwei Li.
+For now, This repo is maintained by Felipe Bivort Haiek.
 
-Welcome to join me to maintenan it together.
+Welcome to join me to maintain it together.
 
 
-For now, “2WayGAN_Pretrain.py” are the same with “1WayGAN_Pretrain.py”, so you can just run “1WayGAN_Pretrain.py” to get the pretrained model.
-
- 
-
-After the pretrain, you need to put the last “\models\pretrain_checkpoint\gan1_pretrain_XXX_XXX.pth” in the root directory, like “gan1_pretrain_100_113.pth” in my repository. Next you need to change the line 15 in “1WayGAN_Train.py” or the same line in “2WayGAN_Train.py”.  Then run “python 1WayGAN_Train.py” or “python 2WayGAN_Train.py” to train.
 
 
