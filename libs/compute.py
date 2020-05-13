@@ -98,7 +98,7 @@ def data_loader_mask():
         ConcatDataset(
             trainset_1_inp,
             trainset_2_gt
-        ),num_workers=6,
+        ),num_workers=NUM_WORKERS,
         batch_size=BATCH_SIZE * GPUS_NUM,  # Enlarge batch_size by a factor of len(device_ids)
         shuffle=True,
     )
@@ -108,7 +108,7 @@ def data_loader_mask():
            
             testset_inp,
             testset_gt
-        ),num_workers=6,
+        ),num_workers=NUM_WORKERS,
         batch_size=BATCH_SIZE * GPUS_NUM,  # Enlarge batch_size by a factor of len(device_ids)
         shuffle=False
     )

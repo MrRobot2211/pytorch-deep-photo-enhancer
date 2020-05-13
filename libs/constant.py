@@ -5,6 +5,7 @@ BETA2 = 0.999
 LAMBDA = 10
 ALPHA = 1e3 # original FLAGS['loss_constant_term_weight'] or  FLAGS['loss_data_term_weight']
 BATCH_SIZE = 4# 5
+NUM_WORKERS = 6
 NUM_EPOCHS_PRETRAIN = 100  # 50
 NUM_EPOCHS_TRAIN = 300
 LATENT_DIM = 100
