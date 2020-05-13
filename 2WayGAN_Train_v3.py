@@ -121,6 +121,12 @@ if __name__ == "__main__":
     if continue_checkpoint:
         optimizer_g.load_state_dict( checkpoint['optimizer_g'])
         optimizer_d.load_state_dict( checkpoint['optimizer_d'])
+        scheduler_g = torch.optim.lr_scheduler.LambdaLR(optimizer_g, adjustLearningRate( 150, 150),last_epoch=checkpoint["epoch"])
+        scheduler_d = torch.optim.lr_scheduler.LambdaLR(optimizer_d, adjustLearningRate( 150, 150),last_epoch=checkpoint["epoch"])
+    else:
+        scheduler_g = torch.optim.lr_scheduler.LambdaLR(optimizer_g, adjustLearningRate( 150, 150))
+        scheduler_d = torch.optim.lr_scheduler.LambdaLR(optimizer_d, adjustLearningRate( 150, 150))
+
 
     #scheduler_g = torch.optim.lr_scheduler.StepLR(optimizer_g,35,1e-1)
     #scheduler_d = torch.optim.lr_scheduler.StepLR(optimizer_d,35,1e-1)
