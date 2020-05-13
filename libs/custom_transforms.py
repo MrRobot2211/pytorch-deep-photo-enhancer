@@ -11,7 +11,7 @@ import numpy as np
 from albumentations.augmentations import functional as F
 import albumentations
 from albumentations.core.transforms_interface import to_tuple, DualTransform, ImageOnlyTransform, NoOp
-
+from albumentations.augmentations.bbox_utils import normalize_bbox, denormalize_bbox
 
 
 class PadDifferentlyIfNeeded(DualTransform):

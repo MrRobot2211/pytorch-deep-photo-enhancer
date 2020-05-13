@@ -5,12 +5,20 @@ import inspect
 
 if torch.cuda.is_available() :   
     device = torch.device('cuda', 0)  # Default CUDA device
+
+
+    Tensor_gpu = torch.cuda.FloatTensor
+    GPUS_NUM = torch.cuda.device_count()
 else:
     device = torch.device('cpu')
+    Tensor_gpu = torch.FloatTensor
+    GPUS_NUM = 2
+
+
 device_ids = [0, 1, 2, 3]  # CUDA ids
-Tensor_gpu = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.FloatTensor
+
 Tensor = torch.FloatTensor
-GPUS_NUM = torch.cuda.device_count()  # the GPUs' number
+  # the GPUs' number
 #torch.nn.InstanceNorm2d
 # share all layers from the other model except batchnorms
 #correct gadient penalty... aready ok ...ee the calculations for 2 way gan losses
@@ -26,7 +34,7 @@ class Generator(nn.Module):
             nn.ReflectionPad2d(2),
             nn.Conv2d(3, 16, 5, stride=1, padding=0),
             nn.SELU(inplace=True),
-            nn.InstanceNorm2d(16)
+            nn.BatchNorm2d(16)
         )
 
         # input 512x512x16  output 256x256x32
@@ -34,7 +42,7 @@ class Generator(nn.Module):
             nn.ReflectionPad2d(2),
             nn.Conv2d(16, 32, 5, stride=2, padding=0),
             nn.SELU(inplace=True),
-            nn.InstanceNorm2d(32)
+            nn.BatchNorm2d(32)
         )
 
         # input 256x256x32  output 128x128x64
@@ -42,7 +50,7 @@ class Generator(nn.Module):
             nn.ReflectionPad2d(2),
             nn.Conv2d(32, 64, 5, stride=2, padding=0),
             nn.SELU(inplace=True),
-            nn.InstanceNorm2d(64)
+            nn.BatchNorm2d(64)
         )
 
         # input 128x128x64  output 64x64x128
@@ -50,7 +58,7 @@ class Generator(nn.Module):
             nn.ReflectionPad2d(2),
             nn.Conv2d(64, 128, 5, stride=2, padding=0),
             nn.SELU(inplace=True),
-            nn.InstanceNorm2d(128)
+            nn.BatchNorm2d(128)
         )
 
         # input 64x64x128  output 32x32x128
@@ -59,7 +67,7 @@ class Generator(nn.Module):
             nn.ReflectionPad2d(2),
             nn.Conv2d(128, 128, 5, stride=2, padding=0),
             nn.SELU(inplace=True),
-            nn.InstanceNorm2d(128)
+            nn.BatchNorm2d(128)
         )
 
         # convs for global features
@@ -101,7 +109,7 @@ class Generator(nn.Module):
         # input 32x32x128 output 64x64x128
         self.dconv1 = nn.Sequential(
             nn.SELU(inplace=True),
-            nn.InstanceNorm2d(128),
+            nn.BatchNorm2d(128),
             nn.ReflectionPad2d(1),
             nn.Conv2d(128, 128, 3, stride=1, padding=0),
             nn.Upsample(scale_factor=2,  mode='nearest') 
@@ -110,7 +118,7 @@ class Generator(nn.Module):
         # input 64x64x128 ouput 128x128x128
         self.dconv2 = nn.Sequential(
             nn.SELU(inplace=True),
-            nn.InstanceNorm2d(256),
+            nn.BatchNorm2d(256),
            
             nn.ReflectionPad2d(1),
 
@@ -121,7 +129,7 @@ class Generator(nn.Module):
         # input 128x128x192 output 256x256x96
         self.dconv3 = nn.Sequential(
             nn.SELU(inplace=True),
-            nn.InstanceNorm2d(192),
+            nn.BatchNorm2d(192),
             nn.ReflectionPad2d(1),
             nn.Conv2d(192, 64, 3, stride=1, padding=0),
             nn.Upsample(scale_factor=2, mode='nearest')
@@ -130,7 +138,7 @@ class Generator(nn.Module):
         # input 256x256x96 ouput 512x512x32
         self.dconv4 = nn.Sequential(
             nn.SELU(inplace=True),
-            nn.InstanceNorm2d(96),
+            nn.BatchNorm2d(96),
             nn.ReflectionPad2d(1),
             nn.Conv2d(96, 32, 3, stride=1, padding=0),
             nn.Upsample(scale_factor=2, mode='nearest')
@@ -140,7 +148,7 @@ class Generator(nn.Module):
         # input 512x512x48 output 512x512x16
         self.conv8 = nn.Sequential(
             nn.SELU(inplace=True),
-            nn.InstanceNorm2d(48),
+            nn.BatchNorm2d(48),
             #nn.ReflectionPad2d(1),
             nn.Conv2d(48, 16, 1, stride=1, padding=0)
         )
@@ -148,7 +156,7 @@ class Generator(nn.Module):
         # input 512x512x16 output 512x512x3
         self.conv9 = nn.Sequential(
             nn.SELU(inplace=True),
-            nn.InstanceNorm2d(16),
+            nn.BatchNorm2d(16),
             #nn.ReflectionPad2d(1),
             nn.Conv2d(16, 3, 1, stride=1, padding=0)
         )
@@ -230,8 +238,8 @@ def build_shared_layer_new_bn(generator,layer_name):
     if (len(layer._modules) == 3 )  and ('conv' in layer_name):
         new_modules = []
         for module in layer.children() :
-            if isinstance(module,nn.InstanceNorm2d):
-                new_modules.append(nn.InstanceNorm2d(module.num_features))
+            if isinstance(module,nn.BatchNorm2d):
+                new_modules.append(nn.BatchNorm2d(module.num_features))
 
             else:
               new_modules.append(module)    
@@ -333,7 +341,7 @@ class Discriminator(nn.Module):
             nn.ReflectionPad2d(2),
             nn.Conv2d(3, 16,kernel_size= 3, stride=1, padding=0),
             nn.LeakyReLU(0.2,inplace=True),
-            nn.InstanceNorm2d(16)
+            nn.InstanceNorm2d(16,affine=True)
         )
 
         # input 512x512x16  output 256x256x32
@@ -341,7 +349,7 @@ class Discriminator(nn.Module):
             nn.ReflectionPad2d(2),
             nn.Conv2d(16, 32, 5, stride=2, padding=0),
             nn.LeakyReLU(0.2,inplace=True),
-            nn.InstanceNorm2d(32)
+            nn.InstanceNorm2d(32,affine=True)
         )
 
         # input 256x256x32  output 128x128x64
@@ -349,7 +357,7 @@ class Discriminator(nn.Module):
             nn.ReflectionPad2d(2),
             nn.Conv2d(32, 64, 5, stride=2, padding=0),
             nn.LeakyReLU(0.2,inplace=True),
-            nn.InstanceNorm2d(64)
+            nn.InstanceNorm2d(64,affine=True)
         )
 
         # input 128x128x64  output 64x64x128
@@ -357,7 +365,7 @@ class Discriminator(nn.Module):
             nn.ReflectionPad2d(2),
             nn.Conv2d(64, 128, 5, stride=2, padding=0),
             nn.LeakyReLU(0.2,inplace=True),
-            nn.InstanceNorm2d(128)
+            nn.InstanceNorm2d(128,affine=True)
         )
 
         # input 64x64x128  output 32x32x128
@@ -366,7 +374,7 @@ class Discriminator(nn.Module):
             nn.ReflectionPad2d(2),
             nn.Conv2d(128, 128, 5, stride=2, padding=0),
             nn.LeakyReLU(0.2,inplace=True),
-            nn.InstanceNorm2d(128)
+            nn.InstanceNorm2d(128,affine=True)
         )
 
         # input 32x32x128  output 16x16x128
@@ -375,7 +383,7 @@ class Discriminator(nn.Module):
             nn.ReflectionPad2d(2),
             nn.Conv2d(128, 128, 5, stride=2, padding=0),
             nn.LeakyReLU(inplace=True),
-            nn.InstanceNorm2d(128)
+            nn.InstanceNorm2d(128,affine=True)
         )
 
         # input 16x16x128  output 1x1x128
@@ -449,15 +457,15 @@ def init_weights(net, init_type='normal', init_gain=0.02):
             elif init_type == 'xavier': 
                 init.xavier_normal_(m.weight.data, gain=init_gain)
             elif init_type == 'kaiming':
-                init.kaiming_normal_(m.weight.data, a=0.2, mode='fan_in')
-                #init.kaiming_normal_(m.weight.data, a= 1e-7, mode='fan_in')
+                init.kaiming_normal_(m.weight.data, a=32., mode='fan_in')
+               # init.kaiming_normal_(m.weight.data, a= .2, mode='fan_in')
             elif init_type == 'orthogonal':
                 init.orthogonal_(m.weight.data, gain=init_gain)
             else:
                 raise NotImplementedError('initialization method [%s] is not implemented' % init_type)
             if hasattr(m, 'bias') and m.bias is not None:
                 init.constant_(m.bias.data, 0.0)
-        elif classname.find('BatchNorm2d') != -1:  # BatchNorm Layer's weight is not a matrix; only normal distribution applies.
+        elif (classname.find('BatchNorm2d') != -1): #or (classname.find('InstanceNorm2d') != -1):  # BatchNorm Layer's weight is not a matrix; only normal distribution applies.
             init.normal_(m.weight.data, 1.0, init_gain)
             init.constant_(m.bias.data, 0.0)
 
@@ -465,7 +473,7 @@ def init_weights(net, init_type='normal', init_gain=0.02):
     net.apply(init_func)  # apply the initialization function <init_func>
 
 
-def init_net(net, init_type='kaiming', init_gain=0.001, gpu_ids=[]):
+def init_net(net, init_type='kaiming', init_gain=0.01, gpu_ids=[]):
     """Initialize a network: 1. register CPU/GPU device (with multi-GPU support); 2. initialize the network weights
     Parameters:
         net (network)      -- the network to be initialized
@@ -475,9 +483,6 @@ def init_net(net, init_type='kaiming', init_gain=0.001, gpu_ids=[]):
 
     Return an initialized network.
     """
-    if len(gpu_ids) > 0:
-        assert(torch.cuda.is_available())
-        net.to(gpu_ids[0])
-        net = torch.nn.DataParallel(net, gpu_ids)  # multi-GPUs
+    
     init_weights(net, init_type, init_gain=init_gain)
     return net

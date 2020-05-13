@@ -1,4 +1,4 @@
-import os, sys, gc
+import os, sys, gc,parser
 import libs.network_infer
 import torch.optim as optim
 from torchvision.utils import save_image
@@ -73,7 +73,7 @@ def getInputPhoto(file_name):
     else:
         return None
 
-def processImg(file_in_name, file_out_name):
+def processImg(file_in_name, file_out_name,generator_model):
     #print(current_time() + ', [processImg]: file_name = %s' % (FLAGS['folder_input'] + file_in_name))
     file_out_name_without_ext = os.path.splitext(file_out_name)[0]
     
@@ -97,7 +97,7 @@ def processImg(file_in_name, file_out_name):
 
     #generator = nn.DataParallel(generator)
 
-    module_dict=torch.load('/home/felipe/deep-photo-enhancer-master/models/train_checkpoint/2Way/gan2_train_28_40.pth', map_location=device)
+    module_dict=torch.load(generator_model, map_location=device)
    # module_dict=torch.load('/home/felipe/deep-photo-enhancer-master/models/train_checkpoint/2Way/gan2_train_92_60.pth')
     generator.load_state_dict(module_dict)
     
@@ -196,13 +196,23 @@ def processImg(file_in_name, file_out_name):
     #os.rename( file_out_name_without_ext + '.jpg', enhance_img_file_path)
 
     #return enhanced_img_file_name
+parser = argparse.ArgumentParser(description="train 3DCAE net",
+                                    formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser.add_argument('--generator_model', type=str, default='/home/felipe/deep-photo-enhancer-master/models/train_checkpoint/2Way/gan2_train_28_40.pth',
+                    help='train, test.')                                    
+parser.add_argument('--input_image', type=str, default='/home/felipe/deep-photo-enhancer-master/images_LR/images-2.jpg',
+                    help='train, test.')
+parser.add_argument('--output_image', type=str, default='/home/felipe/deep-photo-enhancer-master/images_LR/images-2inferred.jpg',
+                    help='1000 is ok')
 
 
 
 if __name__ == "__main__":
+    
+    args = parser.parse_args()
 
    
-    processImg('/home/felipe/deep-photo-enhancer-master/images_LR/images-2.jpg', '/home/felipe/deep-photo-enhancer-master/images_LR/images-2inferred.jpg')
+    processImg(args.input_image,args.output_image,args.generator_model)
 
 
 

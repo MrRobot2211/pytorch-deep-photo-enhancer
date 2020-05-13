@@ -45,5 +45,6 @@ if __name__ =="__main__":
        # resize_image("/home/felipe/deep-photo-enhancer-master/images_LR/input/Training2/1")
        # resize_image("/home/felipe/deep-photo-enhancer-master/images_LR/Expert-C/Testing/1")
        # resize_image("/home/felipe/deep-photo-enhancer-master/images_LR/Expert-C/Training1/1")
-       # resize_image("/home/felipe/deep-photo-enhancer-master/images_LR/Expert-C/Training2/1")
+        rename_MIT_files("/home/felipe/deep-photo-enhancer-master/images_LR/Expert-C/Training2/1")
+        resize_image("/home/felipe/deep-photo-enhancer-master/images_LR/Expert-C/Training2/1")
        # resize_image("/home/felipe/deep-photo-enhancer-master/images_LR/Expert-C/Training2/hdrs")

@@ -23,8 +23,14 @@ D_G_ratio = 50
 if __name__ == "__main__":
 
     start_time = datetime.now()
+    if continue_checkpoint:
+        checkpoint = torch.load(continue_checkpoint)
+        #temporary
+        #writer1 = checkpoint["summary_writer"] 
+        writer1 = tensorboardX.SummaryWriter('./runs/exp-1')
+    else:
 
-    writer1 = tensorboardX.SummaryWriter('./runs/exp-1')
+        writer1 = tensorboardX.SummaryWriter('./runs/exp-1')
 
     # Creating generator and discriminator
     generatorX = Generator()
@@ -32,40 +38,62 @@ if __name__ == "__main__":
     
 
     #generatorX.load_state_dict(torch.load('./gan1_pretrain_100_14.pth', map_location=device))
-    init_net(generatorX,'xavier')
+    
     
 
     generatorX_ = Generator_(generatorX)
+
+    if continue_checkpoint:
+        generatorX.load_state_dict( checkpoint['generatorX'])
+        generatorX_.load_state_dict( checkpoint['generatorX_'])
+    
+    else:
+        init_net(generatorX)
+        init_net(generatorX_)
 
     generatorX = nn.DataParallel(generatorX)
 
     
 
     generatorX_ = nn.DataParallel(generatorX_)
-    generatorX.train()
-
+   
     generatorY = Generator()
-    init_net(generatorY,'xavier')
+    
     
     #generatorY.load_state_dict(torch.load('./gan1_pretrain_100_14.pth', map_location=device))
     generatorY_ = Generator_(generatorY)
     
+
+    if continue_checkpoint:
+        generatorY.load_state_dict( checkpoint['generatorY'])
+        generatorY_.load_state_dict( checkpoint['generatorY_'])
+    else:
+        init_net(generatorY)
+        init_net(generatorY_)
+
     generatorY = nn.DataParallel(generatorY)
    
     generatorY_ = nn.DataParallel(generatorY_)
 
 
-
-    generatorY.train()
-
+    
     
 
     discriminatorY = Discriminator()
-    init_net(discriminatorY)
-    discriminatorY = nn.DataParallel(discriminatorY)
-
+    
+   
     discriminatorX = Discriminator()
-    init_net(discriminatorX)
+
+    if continue_checkpoint:
+        discriminatorX.load_state_dict( checkpoint['discriminatorX'])
+        discriminatorY.load_state_dict( checkpoint['discriminatorY'])
+    else:
+        init_net(discriminatorY)
+        init_net(discriminatorX)
+        
+    
+    
+    discriminatorY = nn.DataParallel(discriminatorY)
     discriminatorX = nn.DataParallel(discriminatorX)
 
     if torch.cuda.is_available():
@@ -83,21 +111,51 @@ if __name__ == "__main__":
     # MSE Loss and Optimizer
     criterion = nn.MSELoss()
 
-    optimizer_g = optim.Adam(itertools.chain(generatorX.parameters(), generatorY.parameters()), lr=LEARNING_RATE, betas=(BETA1, BETA2))
+    optimizer_g = optim.Adam(itertools.chain(generatorX.parameters(), generatorY.parameters(),generatorX_.parameters(),generatorY_.parameters()), lr=LEARNING_RATE, betas=(BETA1, BETA2))
     optimizer_d = optim.Adam(itertools.chain(discriminatorY.parameters(),discriminatorX.parameters()), lr=LEARNING_RATE, betas=(BETA1, BETA2))
 
-    scheduler_g = torch.optim.lr_scheduler.StepLR(optimizer_g,70,1e-2)
-    scheduler_d = torch.optim.lr_scheduler.StepLR(optimizer_d,70,1e-2)
 
-    LambdaAdapt = LambdaAdapter(LAMBDA,D_G_ratio)
+    #optimizer_g = optim.SGD(itertools.chain(generatorX.parameters(), generatorY.parameters(),generatorX_.parameters(),generatorY_.parameters()), lr=LEARNING_RATE)
+    #optimizer_d = optim.SGD(itertools.chain(discriminatorY.parameters(),discriminatorX.parameters()), lr=LEARNING_RATE)
+
+    if continue_checkpoint:
+        optimizer_g.load_state_dict( checkpoint['optimizer_g'])
+        optimizer_d.load_state_dict( checkpoint['optimizer_d'])
+
+    #scheduler_g = torch.optim.lr_scheduler.StepLR(optimizer_g,35,1e-1)
+    #scheduler_d = torch.optim.lr_scheduler.StepLR(optimizer_d,35,1e-1)
+
+    scheduler_g = torch.optim.lr_scheduler.LambdaLR(optimizer_g, adjustLearningRate( 150, 150),last_epoch=checkpoint["epoch"])
+    scheduler_d = torch.optim.lr_scheduler.LambdaLR(optimizer_d, adjustLearningRate( 150, 150),last_epoch=checkpoint["epoch"])
+
+    if continue_checkpoint:
+        LambdaAdapt = checkpoint["adapter"]
+        LambdaAdapt.netD_times=50
+    else:
+        LambdaAdapt = LambdaAdapter(LAMBDA,D_G_ratio)
+
+    generatorX.train()
+    generatorX_.train()
+    generatorY.train()
+    generatorY_.train()
+    discriminatorX.train()
+    discriminatorY.train()
 
     
-
-
-    batches_done = 0
     generator_loss = []
     discriminator_loss = []
-    for epoch in range(NUM_EPOCHS_TRAIN):
+    
+    if continue_checkpoint:
+        start_epoch = checkpoint['epoch']
+        batches_done = checkpoint['batches_done'] 
+        #batches_done = checkpoint['batches_done'] 
+        #g_loss = checkpoint['g_loss'] 
+        #d_loss = checkpoint['d_loss'] 
+    else:
+        start_epoch=0
+        batches_done = 0
+
+    for epoch in range(start_epoch,NUM_EPOCHS_TRAIN):
         for i, (data, gt1) in enumerate(trainLoader_cross, 0):
 
             input, maskInput= data
@@ -130,59 +188,16 @@ if __name__ == "__main__":
             
            # y2 = generatorX_(x1)          # stands for y''
 
-           
-            if (LambdaAdapt.netD_change_times_1 > 0 and LambdaAdapt.netD_times >= 0 and LambdaAdapt.netD_times % LambdaAdapt.netD_change_times_1 == 0) or batches_done % 50 == 0: 
-                LambdaAdapt.netD_times = 0
-           # if batches_done % 20 == 0:
-                recInput = generatorY_(torch.clamp(fakeEnhanced,0,1))     # stands for x''
-                recEnhanced = generatorX_(torch.clamp(fakeInput,0,1))   # stands for y''
-
-                set_requires_grad([discriminatorY,discriminatorX], False)
-                
-                
-                # TRAIN GENERATOR
-                #generatorX.zero_grad()
-
-                #generatorY.zero_grad()
-
-                optimizer_g.zero_grad()
-               
-
-                ag = compute_g_adv_loss(discriminatorY,discriminatorX, fakeEnhanced,fakeInput)
-                
-                # i_loss = computeIdentityMappingLoss(realInput, fakeInput, realEnhanced, fakeEnhanced)
-                
-                i_loss = computeIdentityMappingLoss(generatorX, generatorY, realEnhanced *maskEnhanced,realInput * maskInput)
-
-                c_loss = computeCycleConsistencyLoss(realInput * maskInput , recInput* maskInput  , realEnhanced*maskEnhanced, recEnhanced*maskEnhanced)
-
-                g_loss = computeGeneratorLossFor2WayGan(ag, i_loss, c_loss)
-
-                #set_requires_grad([discriminatorY,discriminatorX], False)
-                # ag.backward(retain_graph=True)
-                # i_loss.backward(retain_graph=True)
-                # c_loss.backward(retain_graph=True)
-                g_loss.backward()
-
-                torch.nn.utils.clip_grad_value_(itertools.chain(generatorX.parameters(), generatorY.parameters()),clip_value)
-
-
-                optimizer_g.step()
-                
-                del ag,i_loss,c_loss,recEnhanced,recInput#x2,y2 #,g_loss
-                if torch.cuda.is_available() :   
-                    torch.cuda.empty_cache()
-                else:
-                    gc.collect()
-
-           
+          
             
         
 
-            if batches_done % 500 == 0:
+            if batches_done % 150 == 0:
                 # Training Network
                 psnr=0
+                d_test_loss=0
                 generatorX.eval()
+                discriminatorY.eval()
                 with torch.no_grad():
                     for j, (data_t, gt1_t) in enumerate(testLoader, 0):
 
@@ -190,8 +205,8 @@ if __name__ == "__main__":
                         input_test, maskInput_test = data_t
                         Testgt, maskEnhanced_test = gt1_t
 
-                        maskInput = Variable(maskInput_test.type(Tensor_gpu)) 
-                        maskEnhanced = Variable(maskEnhanced_test.type(Tensor_gpu)) 
+                        maskInput_test = Variable(maskInput_test.type(Tensor_gpu)) 
+                        maskEnhanced_test = Variable(maskEnhanced_test.type(Tensor_gpu)) 
 
                         
                         realInput_test = Variable(input_test.type(Tensor_gpu))
@@ -200,43 +215,31 @@ if __name__ == "__main__":
                         
                         
                         fakeEnhanced_test = generatorX(realInput_test)
-                        test_loss = criterion( realEnhanced_test*maskEnhanced,fakeEnhanced_test*maskInput  )
+                        test_loss = criterion( realEnhanced_test*maskEnhanced_test,torch.clamp(fakeEnhanced_test,0,1)*maskInput_test  )
                         #psnr is okey because answers are from zero to one...we should check clamping in between (?)
                         psnr = psnr + 10 * torch.log10(1 / (test_loss))
+                        d_test_loss = d_test_loss + torch.mean(discriminatorY(fakeEnhanced_test))-torch.mean(discriminatorY(realEnhanced_test))
                     psnrAvg = psnr/(j+1)
+                    d_test_lossAvg = d_test_loss /(j+1)
 
                     print("Loss loss: %f" % test_loss)
+                    print("DLoss loss: %f" % d_test_lossAvg)
                     print("PSNR Avg: %f" % (psnrAvg ))
+                    f = open("./models/dtest_loss_trailing.txt", "a+")
+                    f.write("dtest_loss_Avg: %f" % ( d_test_lossAvg ))
+                    f.close()
                     f = open("./models/psnr_Score_trailing.txt", "a+")
                     f.write("PSNR Avg: %f" % (psnrAvg ))
                     f.close()
                     writer1.add_scalar('PSNR test',psnrAvg,batches_done)
 
-                    for k in range(0, realInput_test.data.shape[0]):
-                        save_image(realInput_test.data[k], "./models/train_images/2Way/2Way_Train_%d_%d_%d.png" % (epoch+1, batches_done+1, k+1),
-                                    nrow=1,
-                                    normalize=True)
-                    if GPUS_NUM >1:
-                        torch.save(generatorX.module.state_dict(),
-                                    './models/train_checkpoint/2Way/gan2_train_' + str(epoch) + '_' + str(i) + '.pth')
-
-
-                        torch.save(discriminatorY.module.state_dict(),
-                                    './models/train_checkpoint/2Way/discriminator2_train_' + str(epoch) + '_' + str(i) + '.pth')
-
-                    
-                    else:
-                        torch.save(generatorX.state_dict(),
-                                    './models/train_checkpoint/2Way/gan2_train_' + str(epoch) + '_' + str(i) + '.pth')
-
-
-                        torch.save(discriminatorY.state_dict(),
-                                    './models/train_checkpoint/2Way/discriminator2_train_' + str(epoch) + '_' + str(i) + '.pth')
-
-                    for k in range(0, fakeEnhanced_test.data.shape[0]):
-                        save_image(fakeEnhanced_test.data[k],
-                                    "./models/train_test_images/2Way/2Way_Train_Test_%d_%d_%d.png" % (epoch, batches_done, k),
-                                    nrow=1, normalize=True)
+                if batches_done % 1200 == 0:
+                       
+                     
+                        for k in range(0, fakeEnhanced_test.data.shape[0]):
+                            save_image((fakeEnhanced_test*maskInput_test).data[k],
+                                        "./models/train_test_images/2Way/2Way_Train_Test_%d_%d_%d.png" % (epoch, batches_done, k),
+                                        nrow=1, normalize=True)
                     
                 del fakeEnhanced_test ,realEnhanced_test , realInput_test,  gt1_t, data_t,maskInput_test,maskEnhanced_test ,Testgt, input_test, test_loss
                 
@@ -246,6 +249,7 @@ if __name__ == "__main__":
                     gc.collect()
 
                 generatorX.train()
+                discriminatorY.train()
             
             set_requires_grad([discriminatorY,discriminatorX], True)
 
@@ -276,20 +280,81 @@ if __name__ == "__main__":
 
             d_loss = computeDiscriminatorLossFor2WayGan(ad, LambdaAdapt.netD_gp_weight_1*gradient_penalty1 + LambdaAdapt.netD_gp_weight_2 * gradient_penalty2)
             
+            #d_loss = ad
             d_loss.backward()
 
             torch.nn.utils.clip_grad_value_(itertools.chain(discriminatorY.parameters(),discriminatorX.parameters()),clip_value)
 
             optimizer_d.step()
 
+            
+
+             
+            if (LambdaAdapt.netD_change_times_1 > 0 and LambdaAdapt.netD_times >= 0 and LambdaAdapt.netD_times % LambdaAdapt.netD_change_times_1 == 0): # or (batches_done % 50 == 0): 
+                LambdaAdapt.netD_times = 0
+           # if batches_done % 20 == 0:
+                recInput = generatorY_(torch.clamp(fakeEnhanced,0,1))     # stands for x''
+                recEnhanced = generatorX_(torch.clamp(fakeInput,0,1))   # stands for y''
+
+                set_requires_grad([discriminatorY,discriminatorX], False)
+                
+                
+                # TRAIN GENERATOR
+                #generatorX.zero_grad()
+
+                #generatorY.zero_grad()
+
+                optimizer_g.zero_grad()
+               
+
+                ag = compute_g_adv_loss(discriminatorY,discriminatorX, fakeEnhanced,fakeInput)
+                
+                i_loss = computeIdentityMappingLoss_dpeversion(realInput* maskInput, realEnhanced*maskEnhanced, fakeInput*maskEnhanced, fakeEnhanced* maskInput)
+                
+                #i_loss = computeIdentityMappingLoss(generatorX, generatorY, realEnhanced *maskEnhanced,realInput * maskInput)
+
+                c_loss = computeCycleConsistencyLoss(realInput * maskInput , recInput* maskInput  , realEnhanced*maskEnhanced, recEnhanced*maskEnhanced)
+
+                g_loss = computeGeneratorLossFor2WayGan(ag, i_loss, c_loss)
+
+                #set_requires_grad([discriminatorY,discriminatorX], False)
+                # ag.backward(retain_graph=True)
+                # i_loss.backward(retain_graph=True)
+                # c_loss.backward(retain_graph=True)
+                g_loss.backward()
+
+                torch.nn.utils.clip_grad_value_(itertools.chain(generatorX.parameters(), generatorY.parameters()),clip_value)
+
+
+                optimizer_g.step()
+                
+                del ag,i_loss,c_loss,recEnhanced,recInput#x2,y2 #,g_loss
+                if torch.cuda.is_available() :   
+                    torch.cuda.empty_cache()
+                else:
+                    gc.collect()
+
+            if batches_done % 1200 == 0:
+                       
+                        if GPUS_NUM >1:
+                            
+                            torch.save({'generatorX':generatorX.module.state_dict(),'generatorX_':generatorX_.module.state_dict(),
+                            'generatorY':generatorY.module.state_dict(),'generatorY_':generatorY_.module.state_dict(),
+                            'discriminatorY':discriminatorY.module.state_dict(),'discriminatorX':discriminatorX.module.state_dict(),
+                            'optimizer_g':optimizer_g.state_dict(),'optimizer_d':optimizer_d.state_dict(),
+                            'adapter':LambdaAdapt, 
+                            'g_loss':g_loss,'d_loss':d_loss,
+                            #'summary_writer': writer1,
+                                'epoch':epoch,'batches_done':batches_done},'./models/train_checkpoint/2Way/full_train_' + str(epoch) + '_' + str(i) + '.pth')
+
+                    
             batches_done += 1
             LambdaAdapt.netD_times += 1
-            scheduler_g.step()
-            scheduler_d.step()
+        
             print("Done training discriminator on iteration: %d" % i)
 
-            print("[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f] [ad loss: %f]  [gp1 loss: %f] [gp2 loss: %f][wp1 loss: %f] [wp2 loss: %f]" % (
-                epoch + 1, NUM_EPOCHS_TRAIN, i + 1, len(trainLoader_cross), d_loss.item(), g_loss.item(),
+            print("[Epoch %d/%d] [Batch %d/%d] [lr: %f] [D loss: %f] [G loss: %f] [ad loss: %f]  [gp1 loss: %f] [gp2 loss: %f][wp1 loss: %f] [wp2 loss: %f] " % (
+                epoch + 1, NUM_EPOCHS_TRAIN, i + 1,len(trainLoader_cross),scheduler_g.get_last_lr()[0] , d_loss.item(), g_loss.item(),
                  ad,gradient_penalty1,gradient_penalty2,LambdaAdapt.netD_gp_weight_1,LambdaAdapt.netD_gp_weight_2 ))
 
             writer1.add_scalars("losses", {'D loss':d_loss.item(), 'G loss':g_loss.item(),
@@ -300,6 +365,9 @@ if __name__ == "__main__":
             f.write("[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f]\n" % (
                 epoch + 1, NUM_EPOCHS_TRAIN, i + 1, len(trainLoader_cross), d_loss.item(), g_loss.item()))
             f.close()
+        scheduler_g.step()
+        scheduler_d.step()
+           
         
             
     # TEST NETWORK
@@ -350,137 +418,3 @@ if __name__ == "__main__":
 
     end_time = datetime.now()
     print(end_time - start_time)
-
-# G_AB = Generator()
-# G_BA = Generator()
-# D_A = Discriminator()
-# D_B = Discriminator()
-
-# batches_done = 0
-# prev_time = time.time()
-# for epoch in range(opt.n_epochs):
-#     for i, batch in enumerate(dataloader):
-
-#         # Configure input
-#         imgs_A = Variable(batch["A"].type(FloatTensor))
-#         imgs_B = Variable(batch["B"].type(FloatTensor))
-
-#         # ----------------------
-#         #  Train Discriminators
-#         # ----------------------
-
-#         optimizer_D_A.zero_grad()
-#         optimizer_D_B.zero_grad()
-
-#         # Generate a batch of images
-#         fake_A = G_BA(imgs_B).detach()
-#         fake_B = G_AB(imgs_A).detach()
-
-#         # ----------
-#         # Domain A
-#         # ----------
-
-#         # Compute gradient penalty for improved wasserstein training
-#         gp_A = compute_gradient_penalty(D_A, imgs_A.data, fake_A.data)
-#         # Adversarial loss
-#         D_A_loss = -torch.mean(D_A(imgs_A)) + torch.mean(D_A(fake_A)) + lambda_gp * gp_A
-
-#         # ----------
-#         # Domain B
-#         # ----------
-
-#         # Compute gradient penalty for improved wasserstein training
-#         gp_B = compute_gradient_penalty(D_B, imgs_B.data, fake_B.data)
-#         # Adversarial loss
-#         D_B_loss = -torch.mean(D_B(imgs_B)) + torch.mean(D_B(fake_B)) + lambda_gp * gp_B
-
-#         # Total loss
-#         D_loss = D_A_loss + D_B_loss
-
-#         D_loss.backward()
-#         optimizer_D_A.step()
-#         optimizer_D_B.step()
-
-#         if i % opt.n_critic == 0:
-
-#             # ------------------
-#             #  Train Generators
-#             # ------------------
-
-#             optimizer_G.zero_grad()
-
-#             # Translate images to opposite domain
-#             fake_A = G_BA(imgs_B)
-#             fake_B = G_AB(imgs_A)
-
-#             # Reconstruct images
-#             recov_A = G_BA(fake_B)
-#             recov_B = G_AB(fake_A)
-
-#             # Adversarial loss
-#             G_adv = -torch.mean(D_A(fake_A)) - torch.mean(D_B(fake_B))
-#             # Cycle loss
-#             G_cycle = cycle_loss(recov_A, imgs_A) + cycle_loss(recov_B, imgs_B)
-#             # Total loss
-#             G_loss = lambda_adv * G_adv + lambda_cycle * G_cycle
-
-#             G_loss.backward()
-#             optimizer_G.step()
-
-#             # --------------
-#             # Log Progress
-#             # --------------
-
-#             # Determine approximate time left
-#             batches_left = opt.n_epochs * len(dataloader) - batches_done
-#             time_left = datetime.timedelta(seconds=batches_left * (time.time() - prev_time) / opt.n_critic)
-#             prev_time = time.time()
-
-#             sys.stdout.write(
-#                 "\r[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f, cycle: %f] ETA: %s"
-#                 % (
-#                     epoch,
-#                     opt.n_epochs,
-#                     i,
-#                     len(dataloader),
-#                     D_loss.item(),
-#                     G_adv.data.item(),
-#                     G_cycle.item(),
-#                     time_left,
-#                 )
-#             )
-
-#         # Check sample interval => save sample if there
-#         if batches_done % opt.sample_interval == 0:
-#             sample_images(batches_done)
-
-#         batches_done += 1
-
-# def backward_G(self):
-#         """Calculate the loss for generators G_A and G_B"""
-#         lambda_idt = self.opt.lambda_identity
-#         lambda_A = self.opt.lambda_A
-#         lambda_B = self.opt.lambda_B
-#         # Identity loss
-#         if lambda_idt > 0:
-#             # G_A should be identity if real_B is fed: ||G_A(B) - B||
-#             self.idt_A = self.netG_A(self.real_B)
-#             self.loss_idt_A = self.criterionIdt(self.idt_A, self.real_B) * lambda_B * lambda_idt
-#             # G_B should be identity if real_A is fed: ||G_B(A) - A||
-#             self.idt_B = self.netG_B(self.real_A)
-#             self.loss_idt_B = self.criterionIdt(self.idt_B, self.real_A) * lambda_A * lambda_idt
-#         else:
-#             self.loss_idt_A = 0
-#             self.loss_idt_B = 0
-
-#         # GAN loss D_A(G_A(A))
-#         self.loss_G_A = self.criterionGAN(self.netD_A(self.fake_B), True)
-#         # GAN loss D_B(G_B(B))
-#         self.loss_G_B = self.criterionGAN(self.netD_B(self.fake_A), True)
-#         # Forward cycle loss || G_B(G_A(A)) - A||
-#         self.loss_cycle_A = self.criterionCycle(self.rec_A, self.real_A) * lambda_A
-#         # Backward cycle loss || G_A(G_B(B)) - B||
-#         self.loss_cycle_B = self.criterionCycle(self.rec_B, self.real_B) * lambda_B
-#         # combined loss and calculate gradients
-#         self.loss_G = self.loss_G_A + self.loss_G_B + self.loss_cycle_A + self.loss_cycle_B + self.loss_idt_A + self.loss_idt_B
-#         self.loss_G.backward()

@@ -49,6 +49,7 @@ class ImageDataset(ImageFolder):
         sample = np.array(sample)
         mask = np.ones(sample.shape[:-1])
         #img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+       # augmented = self.transform(image=sample, mask=mask)
         augmented = self.transform(image=sample, mask=mask)
         
         img = augmented['image']
@@ -81,8 +82,8 @@ def data_loader_mask():
     default_transform = albu.Compose([ PadDifferentlyIfNeeded(512,512,mask_value=0)
     , AT.ToTensor()])
   
-    transform = albu.Compose([  albu.Rotate(15)
-    ,PadDifferentlyIfNeeded(512,512,mask_value=0), AT.ToTensor()])
+    transform = albu.Compose([ albu.RandomRotate90(1.0)
+    , albu.HorizontalFlip(0.5),PadDifferentlyIfNeeded(512,512,mask_value=0), AT.ToTensor()])
   
     testset_gt = ImageDataset(root=TEST_ENHANCED_IMG_DIR , transform=default_transform)
     trainset_1_gt = ImageDataset(root=ENHANCED_IMG_DIR, transform=transform)
@@ -97,7 +98,7 @@ def data_loader_mask():
         ConcatDataset(
             trainset_1_inp,
             trainset_2_gt
-        ),
+        ),num_workers=6,
         batch_size=BATCH_SIZE * GPUS_NUM,  # Enlarge batch_size by a factor of len(device_ids)
         shuffle=True,
     )
@@ -107,7 +108,7 @@ def data_loader_mask():
            
             testset_inp,
             testset_gt
-        ),
+        ),num_workers=6,
         batch_size=BATCH_SIZE * GPUS_NUM,  # Enlarge batch_size by a factor of len(device_ids)
         shuffle=False
     )
@@ -232,7 +233,7 @@ def data_loader():
 
 
 def computeGradientPenaltyFor1WayGAN(D, realSample, fakeSample):
-    alpha = Tensor_gpu(np.random.random((realSample.shape)))
+    alpha = torch.rand(realSample.shape[0], 1, device=device)
     interpolates = (alpha * realSample + ((1 - alpha) * fakeSample)).requires_grad_(True)
     dInterpolation = D(interpolates)
     #fakeOutput = Variable(Tensor_gpu(realSample.shape[0], 1, 1, 1).fill_(1.0), requires_grad=False)
@@ -258,7 +259,20 @@ def computeGradientPenaltyFor1WayGAN(D, realSample, fakeSample):
 
     gradientPenalty = np.mean(maxVals)
     return gradientPenalty
-
+# elif type == 'mixed':
+#             alpha = torch.rand(real_data.shape[0], 1, device=device)
+#             alpha = alpha.expand(real_data.shape[0], real_data.nelement() // real_data.shape[0]).contiguous().view(*real_data.shape)
+#             interpolatesv = alpha * real_data + ((1 - alpha) * fake_data)
+#         else:
+#             raise NotImplementedError('{} not implemented'.format(type))
+#         interpolatesv.requires_grad_(True)
+#         disc_interpolates = netD(interpolatesv)
+#         gradients = torch.autograd.grad(outputs=disc_interpolates, inputs=interpolatesv,
+#                                         grad_outputs=torch.ones(disc_interpolates.size()).to(device),
+#                                         create_graph=True, retain_graph=True, only_inputs=True)
+#         gradients = gradients[0].view(real_data.size(0), -1)  # flat the data
+#         gradient_penalty = (((gradients + 1e-16).norm(2, dim=1) - constant) ** 2).mean() * lambda_gp        # added eps
+#         return gradient_penalty, gradients
 
 def compute_gradient_penalty(discriminator, real_sample, fake_sample):
     """
@@ -270,7 +284,7 @@ def compute_gradient_penalty(discriminator, real_sample, fake_sample):
     :return gradient_penalty: instead of the global parameter LAMBDA
     """
     alpha = Tensor_gpu(np.random.random(real_sample.shape))
-    interpolates = (alpha * real_sample + ((1 - alpha) * fake_sample)).requires_grad_(True)  # stands for y^
+    interpolates = (alpha * real_sample + ((1 - alpha) * fake_sample.detach())).requires_grad_(True)  # stands for y^
     d_interpolation = discriminator(interpolates)  # stands for D_Y(y^)
     #fake_output = Variable(Tensor_gpu(real_sample.shape[0], 1).fill_(1.0), requires_grad=False)
     fake_output = Variable(Tensor_gpu(real_sample.shape[0]).fill_(1.0), requires_grad=False)
@@ -292,7 +306,7 @@ def compute_gradient_penalty(discriminator, real_sample, fake_sample):
         if norm_gradients[i] > 0:
             # temp_data = Variable(norm_gradients[i].type(Tensor)).detach().item()
             temp_data = Variable(norm_gradients[i].type(Tensor)).item()
-            max_vals.append(temp_data)
+            max_vals.append(temp_data )
         else:
             max_vals.append(0)
 
@@ -385,7 +399,7 @@ def computeIdentityMappingLoss(generatorX,generatorY,realEnhanced,realInput):
     return i_loss
 
 
-def computeIdentityMappingLoss_dpeversion(x, x1, y, y1):
+def computeIdentityMappingLoss_dpeversion(realInput, realEnhanced, fakeInput, fakeEnhanced):
     """
     This function is used to compute the identity mapping loss
     The equation is Equation(5) in Chp6
@@ -397,7 +411,7 @@ def computeIdentityMappingLoss_dpeversion(x, x1, y, y1):
     """
     # MSE Loss and Optimizer
     criterion = nn.MSELoss()
-    i_loss = criterion(x, y1).mean() + criterion(y, x1).mean()
+    i_loss = criterion(realInput, fakeEnhanced).mean() + criterion(realEnhanced, fakeInput).mean()
 
     return i_loss
 
@@ -492,14 +506,15 @@ def computeGradientPenaltyFor2Way(discriminator, x, x1, y, y1):
 
 
 def computeDiscriminatorLossFor2WayGan(ad, penalty):
-    return -ad + LAMBDA * penalty
+    #return -ad + LAMBDA * penalty
+    return - ad +  penalty
 
 
 def computeGeneratorLossFor2WayGan(ag, i_loss, c_loss):
     return -ag + ALPHA * i_loss + 10 * ALPHA * c_loss
 
 
-def adjustLearningRate(learning_rate, decay_rate, epoch_num):
+def adjustLearningRate( decay_rate, limit_epoch):
     """
     Adjust Learning rate to get better performance
     :param learning_rate:
@@ -507,7 +522,16 @@ def adjustLearningRate(learning_rate, decay_rate, epoch_num):
     :param epoch_num:
     :return:
     """
-    return learning_rate / (1 + decay_rate * epoch_num)
+    def get_decay(epoch_num):
+
+        if epoch_num <= limit_epoch:
+            return 1
+        else:
+            return 1 - ( 1/decay_rate ) *(epoch_num- limit_epoch)
+    
+    return get_decay
+
+    
 
 def set_requires_grad(nets, requires_grad=False):
     """Set requies_grad=Fasle for all the networks to avoid unnecessary computations
@@ -597,7 +621,7 @@ class LambdaAdapter:
             self.netD_wgan_gp_mvavg_1 = self.netD_wgan_gp_mvavg_1 * self.loss_wgan_gp_mv_decay + (gr_penalty1 / self.netD_gp_weight_1) * (1 - self.loss_wgan_gp_mv_decay)
             self.netD_wgan_gp_mvavg_2 = self.netD_wgan_gp_mvavg_2 * self.loss_wgan_gp_mv_decay + (gr_penalty2 / self.netD_gp_weight_2) * (1 - self.loss_wgan_gp_mv_decay)
 
-        if self.netD_update_buffer_1 == 0 and self.netD_wgan_gp_mvavg_1 > self.loss_wgan_gp_bound :
+        if (self.netD_update_buffer_1 == 0) and (self.netD_wgan_gp_mvavg_1 > self.loss_wgan_gp_bound) :
            
             self.netD_gp_weight_1 = self.netD_gp_weight_1 * self.loss_wgan_lambda_grow
             self.netD_change_times_1 = self.netD_change_times_1 * self.netD_times_grow
@@ -606,7 +630,7 @@ class LambdaAdapter:
         
         self.netD_update_buffer_1 = 0 if self.netD_update_buffer_1 == 0 else self.netD_update_buffer_1 - 1
 
-        if self.netD_update_buffer_2 == 0 and self.netD_wgan_gp_mvavg_2 > self.loss_wgan_gp_bound :
+        if (self.netD_update_buffer_2 == 0) and (self.netD_wgan_gp_mvavg_2 > self.loss_wgan_gp_bound) :
            
             self.netD_gp_weight_2 = self.netD_gp_weight_2 * self.loss_wgan_lambda_grow
             self.netD_change_times_2 = self.netD_change_times_2 * self.netD_times_grow
