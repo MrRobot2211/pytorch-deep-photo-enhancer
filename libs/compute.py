@@ -191,46 +191,6 @@ def data_loader():
     return train_loader_1, train_loader_2, train_loader_cross, test_loader
 
 
-# Gradient Penalty
-# def compute_gradient_penalty(discriminator, real_sample, fake_sample):
-#     """
-#     This function used to compute Gradient Penalty
-#     The equation is Equation(4) in Chp5
-#     :param discriminator: stands for D_Y
-#     :param real_sample: stands for Y
-#     :param fake_sample: stands for Y'
-#     :return gradient_penalty: instead of the global parameter LAMBDA
-#     """
-#     alpha = Tensor_gpu(np.random.random(real_sample.shape))
-#     interpolates = (alpha * real_sample + ((1 - alpha) * fake_sample)).requires_grad_(True)  # stands for y^
-#     d_interpolation = discriminator(interpolates)  # stands for D_Y(y^)
-#     fake_output = Variable(Tensor_gpu(real_sample.shape[0], 1, 1, 1).fill_(1.0), requires_grad=False)
-#
-#     gradients = autograd.grad(
-#         outputs=d_interpolation,
-#         inputs=interpolates,
-#         grad_outputs=fake_output,
-#         create_graph=True,
-#         retain_graph=True,
-#         only_inputs=True)[0]
-#
-#     # Use Adaptive weighting scheme
-#     # The following codes stand for the Equation(4) in Chp5
-#     gradients = gradients.view(gradients.size(0), -1)
-#     max_vals = []
-#     norm_gradients = gradients.norm(2, dim=1) - 1
-#     for i in range(len(norm_gradients)):
-#         if norm_gradients[i] > 0:
-#             max_vals.append(Variable(norm_gradients[i].type(Tensor)).detach().numpy())
-#         else:
-#             max_vals.append(0)
-#
-#     tensor_max_vals = torch.as_tensor(max_vals, dtype=torch.float64, device=device)
-#
-#     # gradient_penalty = np.mean(max_vals)
-#     gradient_penalty = torch.mean(tensor_max_vals)
-#     return gradient_penalty
-
 
 def computeGradientPenaltyFor1WayGAN(D, realSample, fakeSample):
     alpha = torch.rand(realSample.shape[0], 1, device=device)
@@ -259,20 +219,7 @@ def computeGradientPenaltyFor1WayGAN(D, realSample, fakeSample):
 
     gradientPenalty = np.mean(maxVals)
     return gradientPenalty
-# elif type == 'mixed':
-#             alpha = torch.rand(real_data.shape[0], 1, device=device)
-#             alpha = alpha.expand(real_data.shape[0], real_data.nelement() // real_data.shape[0]).contiguous().view(*real_data.shape)
-#             interpolatesv = alpha * real_data + ((1 - alpha) * fake_data)
-#         else:
-#             raise NotImplementedError('{} not implemented'.format(type))
-#         interpolatesv.requires_grad_(True)
-#         disc_interpolates = netD(interpolatesv)
-#         gradients = torch.autograd.grad(outputs=disc_interpolates, inputs=interpolatesv,
-#                                         grad_outputs=torch.ones(disc_interpolates.size()).to(device),
-#                                         create_graph=True, retain_graph=True, only_inputs=True)
-#         gradients = gradients[0].view(real_data.size(0), -1)  # flat the data
-#         gradient_penalty = (((gradients + 1e-16).norm(2, dim=1) - constant) ** 2).mean() * lambda_gp        # added eps
-#         return gradient_penalty, gradients
+
 
 def compute_gradient_penalty(discriminator, real_sample, fake_sample):
     """
@@ -546,53 +493,7 @@ def set_requires_grad(nets, requires_grad=False):
             for param in net.parameters():
                 param.requires_grad = requires_grad
 
-# FLAGS['loss_wgan_lambda'] = 10
-# def compute_lambda_update(loss_wgan_lambda):
-    
-#     loss_wgan_lambda_grow = 2.0
-#     FLAGS['loss_wgan_lambda_ignore'] = 1
-#     FLAGS['loss_wgan_use_g_to_one'] = False
-#     FLAGS['loss_wgan_gp_times'] = 1
-#     FLAGS['loss_wgan_gp_use_all'] = False
-#     loss_wgan_gp_bound = 5e-2
-#     loss_wgan_gp_mv_decay = 0.99
-#     netD_wgan_gp_mvavg_1 = 0
-#     netD_wgan_gp_mvavg_2 = 0
-#     netD_gp_weight_1 = FLAGS['loss_wgan_lambda']
-#     netD_gp_weight_2 = FLAGS['loss_wgan_lambda']
-#     netD_update_buffer_1 = 0
-#     netD_change_times_1 = FLAGS['netD_times']
-#     netD_update_buffer_2 = 0
-#     netD_change_times_2 = FLAGS['netD_times']
-#     netD_times = -FLAGS['netD_init_times']
-#     FLAGS['netD_times'] = 50
-#     FLAGS['netD_times_grow'] = 1
-#     FLAGS['netD_buffer_times'] = 50 #it depends on batch size
-#     FLAGS['netD_init_times'] = 0
 
-#     if not (epoch * FLAGS['data_train_batch_count'] + iter < FLAGS['loss_wgan_lambda_ignore']):
-
-#         #  gradient penalty 1 and 2   ___ -netD_train_s[-7]   -netD_train_s[-7]  
-#             netD_wgan_gp_mvavg_1 = netD_wgan_gp_mvavg_1 * FLAGS['loss_wgan_gp_mv_decay'] + (-netD_train_s[-7] / netD_gp_weight_1) * (1 - FLAGS['loss_wgan_gp_mv_decay'])
-#             netD_wgan_gp_mvavg_2 = netD_wgan_gp_mvavg_2 * FLAGS['loss_wgan_gp_mv_decay'] + (-netD_train_s[-6] / netD_gp_weight_2) * (1 - FLAGS['loss_wgan_gp_mv_decay'])
-
-#         if netD_update_buffer_1 == 0 and netD_wgan_gp_mvavg_1 > FLAGS['loss_wgan_gp_bound']:
-           
-#             netD_gp_weight_1 = netD_gp_weight_1 * FLAGS['loss_wgan_lambda_grow']
-#             netD_change_times_1 = netD_change_times_1 * FLAGS['netD_times_grow']
-#             netD_update_buffer_1 = FLAGS['netD_buffer_times']
-#             netD_wgan_gp_mvavg_1 = 0
-        
-#         netD_update_buffer_1 = 0 if netD_update_buffer_1 == 0 else netD_update_buffer_1 - 1
-
-#         if netD_update_buffer_2 == 0 and netD_wgan_gp_mvavg_2 > loss_wgan_gp_bound :
-           
-#             netD_gp_weight_2 = netD_gp_weight_2 * loss_wgan_lambda_grow
-#             netD_change_times_2 = netD_change_times_2 * netD_times_grow
-#             netD_update_buffer_2 = FLAGS['netD_buffer_times']
-#             netD_wgan_gp_mvavg_2 = 0
-        
-#         netD_update_buffer_2 = 0 if netD_update_buffer_2 == 0 else netD_update_buffer_2 - 1
 
 class LambdaAdapter:
     def __init__(self, lambda_init,D_G_ratio):

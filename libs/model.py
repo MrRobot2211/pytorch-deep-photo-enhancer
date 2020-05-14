@@ -18,13 +18,7 @@ else:
 device_ids = [0, 1, 2, 3]  # CUDA ids
 
 Tensor = torch.FloatTensor
-  # the GPUs' number
-#torch.nn.InstanceNorm2d
-# share all layers from the other model except batchnorms
-#correct gadient penalty... aready ok ...ee the calculations for 2 way gan losses
-#check order of conv definitions is the order activation batchnorm convolution ok?
-#padding should be symmetric not implemented on main pytorch apparently https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/layers/padding.py#L28
-# GENERATOR NETWORK
+ 
 class Generator(nn.Module):
     def __init__(self):
         super(Generator, self).__init__()

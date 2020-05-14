@@ -10,13 +10,7 @@ import gc
 
 import tensorboardX  
 
-# we are missing weight decayed specified in the original as regularization loss
-# add cipping the equivalent to tf.clip_by_value  to  torch.clamp(input, 0 , 1 ) !!!!!!verify that we only clamp when applying the inverse!!!!!!!
-#add gradient clipping FLAGS['net_gradient_clip_value'] = 1e8    torch.nn.utils.clip_grad_value_
-#add he ( keras variance scaling ) init with the apropriate weight debug that this is actually initializing all layers ( because of the use of apply)
-#complete loss_wgan_lambda and lambda_grow ...  seting process
-#analize tf_crop_rect
-# add the missing rounding
+
 clip_value = 1e8 
 D_G_ratio = 50
 
@@ -58,9 +52,7 @@ if __name__ == "__main__":
     generatorX_ = nn.DataParallel(generatorX_)
    
     generatorY = Generator()
-    
-    
-    #generatorY.load_state_dict(torch.load('./gan1_pretrain_100_14.pth', map_location=device))
+
     generatorY_ = Generator_(generatorY)
     
 
@@ -75,13 +67,8 @@ if __name__ == "__main__":
    
     generatorY_ = nn.DataParallel(generatorY_)
 
-
-    
-    
-
     discriminatorY = Discriminator()
-    
-   
+ 
     discriminatorX = Discriminator()
 
     if continue_checkpoint:
@@ -114,10 +101,6 @@ if __name__ == "__main__":
     optimizer_g = optim.Adam(itertools.chain(generatorX.parameters(), generatorY.parameters(),generatorX_.parameters(),generatorY_.parameters()), lr=LEARNING_RATE, betas=(BETA1, BETA2))
     optimizer_d = optim.Adam(itertools.chain(discriminatorY.parameters(),discriminatorX.parameters()), lr=LEARNING_RATE, betas=(BETA1, BETA2))
 
-
-    #optimizer_g = optim.SGD(itertools.chain(generatorX.parameters(), generatorY.parameters(),generatorX_.parameters(),generatorY_.parameters()), lr=LEARNING_RATE)
-    #optimizer_d = optim.SGD(itertools.chain(discriminatorY.parameters(),discriminatorX.parameters()), lr=LEARNING_RATE)
-
     if continue_checkpoint:
         optimizer_g.load_state_dict( checkpoint['optimizer_g'])
         optimizer_d.load_state_dict( checkpoint['optimizer_d'])
@@ -128,10 +111,9 @@ if __name__ == "__main__":
         scheduler_d = torch.optim.lr_scheduler.LambdaLR(optimizer_d, adjustLearningRate( 150, 150))
 
 
-
     if continue_checkpoint:
         LambdaAdapt = checkpoint["adapter"]
-        LambdaAdapt.netD_times=50
+        #LambdaAdapt.netD_times=50
     else:
         LambdaAdapt = LambdaAdapter(LAMBDA,D_G_ratio)
 
@@ -150,8 +132,8 @@ if __name__ == "__main__":
         start_epoch = checkpoint['epoch']
         batches_done = checkpoint['batches_done'] 
         #batches_done = checkpoint['batches_done'] 
-        #g_loss = checkpoint['g_loss'] 
-        #d_loss = checkpoint['d_loss'] 
+        g_loss = checkpoint['g_loss'] 
+        d_loss = checkpoint['d_loss'] 
     else:
         start_epoch=0
         batches_done = 0
@@ -167,30 +149,13 @@ if __name__ == "__main__":
 
             realInput = Variable(input.type(Tensor_gpu))   # stands for X
             
-
             realEnhanced = Variable(groundTruth.type(Tensor_gpu))   # stands for Y
             
-
-
-           
             fakeEnhanced = generatorX(realInput)   # stands for Y'
-
-          
 
          
             fakeInput = generatorY(realEnhanced)           # stands for x'
           
-            
-            
-         
-          
-          
-           # 
-            
-           # y2 = generatorX_(x1)          # stands for y''
-
-          
-            
         
 
             if batches_done % 150 == 0:
@@ -254,23 +219,12 @@ if __name__ == "__main__":
             
             set_requires_grad([discriminatorY,discriminatorX], True)
 
-            # TRAIN DISCRIMINATOR
-           # discriminatorX.zero_grad()
-           # discriminatorY.zero_grad()
+         
             optimizer_d.zero_grad()
            
             
-            #computing losses
-            #ad, ag = computeAdversarialLosses(discriminatorY,discriminatorX, trainInput, x1, realImgs, fake_imgs)
-            
             ad = compute_d_adv_loss(discriminatorY,realEnhanced,fakeEnhanced ) + compute_d_adv_loss(discriminatorX,realInput,fakeInput)
 
-
-            # ad.backward(retain_graph=True)
-
-           
-
-            # gradient_penalty.backward(retain_graph=True)
 
             gradient_penalty1 =  compute_gradient_penalty(discriminatorY, realEnhanced, fakeEnhanced) 
             gradient_penalty2 =  compute_gradient_penalty(discriminatorX, realInput,fakeInput)
@@ -298,16 +252,9 @@ if __name__ == "__main__":
                 recEnhanced = generatorX_(torch.clamp(fakeInput,0,1))   # stands for y''
 
                 set_requires_grad([discriminatorY,discriminatorX], False)
-                
-                
-                # TRAIN GENERATOR
-                #generatorX.zero_grad()
-
-                #generatorY.zero_grad()
 
                 optimizer_g.zero_grad()
                
-
                 ag = compute_g_adv_loss(discriminatorY,discriminatorX, fakeEnhanced,fakeInput)
                 
                 i_loss = computeIdentityMappingLoss_dpeversion(realInput* maskInput, realEnhanced*maskEnhanced, fakeInput*maskEnhanced, fakeEnhanced* maskInput)
@@ -318,10 +265,7 @@ if __name__ == "__main__":
 
                 g_loss = computeGeneratorLossFor2WayGan(ag, i_loss, c_loss)
 
-                #set_requires_grad([discriminatorY,discriminatorX], False)
-                # ag.backward(retain_graph=True)
-                # i_loss.backward(retain_graph=True)
-                # c_loss.backward(retain_graph=True)
+
                 g_loss.backward()
 
                 torch.nn.utils.clip_grad_value_(itertools.chain(generatorX.parameters(), generatorY.parameters()),clip_value)
