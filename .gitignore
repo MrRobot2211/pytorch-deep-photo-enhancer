@@ -1,6 +1,6 @@
 /images_LR/*
 /.idea/*
-/models/*
+/model_outputs/*
 /libs/__pycache__/*
 /temp/*
 /runs/*
