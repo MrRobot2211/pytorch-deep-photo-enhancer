@@ -108,6 +108,8 @@ class DPEGANModel(BaseModel):
             self.optimizers.append(self.optimizer_G)
             self.optimizers.append(self.optimizer_D)
 
+            self.weight_adapter = LambdaAdapter(opt.lambda_A,opt.pool_size)
+
     def set_input(self, input):
         """Unpack input data from the dataloader and perform necessary pre-processing steps.
 
@@ -116,30 +118,25 @@ class DPEGANModel(BaseModel):
 
         The option 'direction' can be used to swap domain A and domain B.
         """
-        AtoB = self.opt.direction == 'AtoB'
-        self.real_A = input['A' if AtoB else 'B'].to(self.device)
-        self.real_B = input['B' if AtoB else 'A'].to(self.device)
-        self.mask_A = input['A' if AtoB else 'B'].to(self.device)
-        self.mask_B = input['B' if AtoB else 'A'].to(self.device)
-        
-        input, maskInput= data
-            groundTruth, maskEnhanced = gt1
-            
-            maskInput = Variable(maskInput.type(Tensor_gpu)) 
-            maskEnhanced = Variable(maskEnhanced.type(Tensor_gpu)) 
+        data,gt1= input
+        Input, maskInput= data
+        groundTruth, maskEnhanced = gt1
 
+        self.real_A = Variable(maskInput).to(opt.device)
+        self.real_B =  Variable(maskEnhanced).to(opt.device)
 
+        self.mask_A= Variable(maskInput).to(opt.device) 
+        self.mask_B = Variable(maskEnhanced).to(opt.device)
 
-        self.image_paths = input['A_paths' if AtoB else 'B_paths']
 
     def forward(self):
         """Run forward pass; called by both functions <optimize_parameters> and <test>."""
         self.fake_B = self.netG_A(self.real_A)  # G_A(A)
-        self.rec_A = self.netG_B(self.fake_B)   # G_B(G_A(A))
+        self.rec_A = self.netG_B_(self.fake_B)   # G_B(G_A(A))
         self.fake_A = self.netG_B(self.real_B)  # G_B(B)
-        self.rec_B = self.netG_A(self.fake_A)   # G_A(G_B(B))
+        self.rec_B = self.netG_A_(self.fake_A)   # G_A(G_B(B))
 
-    def backward_D_basic(self, netD, real, fake):
+    def get_loss_D_basic(self, netD, real, fake):
         """Calculate GAN loss for the discriminator
 
         Parameters:
@@ -156,20 +153,39 @@ class DPEGANModel(BaseModel):
         # Fake
         pred_fake = netD(fake.detach())
         loss_D_fake = self.criterionGAN(pred_fake, False)
+
+       
+
+
+
         # Combined loss and calculate gradients
         loss_D = (loss_D_real + loss_D_fake) * 0.5
-        loss_D.backward()
+
+        gradient_penalty1 =  cal_gradient_penalty(discriminatorY, realEnhanced, fakeEnhanced) 
+        gradient_penalty2 =  ca_gradient_penalty(discriminatorX, realInput,fakeInput)
+
+        LambdaAdapt.update_penalty_weights(batches_done ,gradient_penalty1,gradient_penalty2)
+
         return loss_D
 
-    def backward_D_A(self):
+    def backward_D(self,batches_done):
         """Calculate GAN loss for discriminator D_A"""
-        fake_B = self.fake_B_pool.query(self.fake_B)
-        self.loss_D_A = self.backward_D_basic(self.netD_A, self.real_B, fake_B)
+        #fake_B = self.fake_B_pool.query(self.fake_B)
 
-    def backward_D_B(self):
-        """Calculate GAN loss for discriminator D_B"""
-        fake_A = self.fake_A_pool.query(self.fake_A)
-        self.loss_D_B = self.backward_D_basic(self.netD_B, self.real_A, fake_A)
+        self.gradient_penalty1 =  compute_gradient_penalty(discriminatorY, realEnhanced, fakeEnhanced) 
+        self.gradient_penalty2 =  compute_gradient_penalty(discriminatorX, realInput,fakeInput)
+        self.weight_adapter.update_penalty_weights(batches_done ,self.gradient_penalty1,sef.gradient_penalty2)
+
+        self.loss_D_A = self.get_loss_D_basic(self.netD_A, self.real_B, self.fake_B) + self.weight_adapter.netD_gp_weight_1*gradient_penalty1
+        self.loss_D_B = self.get_loss_D_basic(self.netD_B, self.real_A, self.fake_A) + self.weight_adapter.netD_gp_weight_2*gradient_penalty2
+        loss_D = self.loss_D_A + self.loss_D_B
+        loss_D.backward()
+        self.loss_D = loss_D
+
+    # def backward_D_B(self):
+    #     """Calculate GAN loss for discriminator D_B"""
+    #     #fake_A = self.fake_A_pool.query(self.fake_A)
+    #     self.loss_D_B = self.backward_D_basic(self.netD_B, self.real_A, self.fake_A)
 
     def backward_G(self):
         """Calculate the loss for generators G_A and G_B"""
@@ -179,10 +195,10 @@ class DPEGANModel(BaseModel):
         # Identity loss
         if lambda_idt > 0:
             # G_A should be identity if real_B is fed: ||G_A(B) - B||
-            self.idt_A = self.netG_A(self.real_B)
+            self.idt_A = self.netG_A(self.real_B) *self.mask_B
             self.loss_idt_A = self.criterionIdt(self.idt_A, self.real_B) * lambda_B * lambda_idt
             # G_B should be identity if real_A is fed: ||G_B(A) - A||
-            self.idt_B = self.netG_B(self.real_A)
+            self.idt_B = self.netG_B(self.real_A)*self.mask_A
             self.loss_idt_B = self.criterionIdt(self.idt_B, self.real_A) * lambda_A * lambda_idt
         else:
             self.loss_idt_A = 0
@@ -200,18 +216,39 @@ class DPEGANModel(BaseModel):
         self.loss_G = self.loss_G_A + self.loss_G_B + self.loss_cycle_A + self.loss_cycle_B + self.loss_idt_A + self.loss_idt_B
         self.loss_G.backward()
 
-    def optimize_parameters(self):
+    def optimize_parameters(self,batches_done):
         """Calculate losses, gradients, and update network weights; called in every training iteration"""
         # forward
         self.forward()      # compute fake images and reconstruction images.
         # G_A and G_B
-        self.set_requires_grad([self.netD_A, self.netD_B], False)  # Ds require no gradients when optimizing Gs
-        self.optimizer_G.zero_grad()  # set G_A and G_B's gradients to zero
-        self.backward_G()             # calculate gradients for G_A and G_B
-        self.optimizer_G.step()       # update G_A and G_B's weights
+        if (self.weight_adapter.netD_change_times_1 > 0 and  self.weight_adapter.netD_times >= 0 and  self.weight_adapter.netD_times %  self.weight_adapter.netD_change_times_1 == 0): # or (batches_done % 50 == 0): 
+            self.weight_adapter.netD_times = 0
+            self.set_requires_grad([self.netD_A, self.netD_B], False)  # Ds require no gradients when optimizing Gs
+            self.optimizer_G.zero_grad()  # set G_A and G_B's gradients to zero
+            self.backward_G()             # calculate gradients for G_A and G_B
+            self.optimizer_G.step()       # update G_A and G_B's weights
         # D_A and D_B
+   
         self.set_requires_grad([self.netD_A, self.netD_B], True)
         self.optimizer_D.zero_grad()   # set D_A and D_B's gradients to zero
-        self.backward_D_A()      # calculate gradients for D_A
-        self.backward_D_B()      # calculate graidents for D_B
+        self.backward_D(batches_done)      # calculate gradients for D_A and D_B
         self.optimizer_D.step()  # update D_A and D_B's weights
+
+
+    def save_networks(self, epoch):
+        """Save all the networks to the disk.
+
+        Parameters:
+            epoch (int) -- current epoch; used in the file name '%s_net_%s.pth' % (epoch, name)
+        """
+        for name in self.model_names:
+            if isinstance(name, str):
+                save_filename = '%s_net_%s.pth' % (epoch, name)
+                save_path = os.path.join(self.save_dir, save_filename)
+                net = getattr(self, 'net' + name)
+
+                if len(self.gpu_ids) > 0 and torch.cuda.is_available():
+                    torch.save(net.module.cpu().state_dict(), save_path)
+                    net.cuda(self.gpu_ids[0])
+                else:
+                    torch.save(net.cpu().state_dict(), save_path)

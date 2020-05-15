@@ -54,6 +54,7 @@ def create_dataset(opt):
         >>> from data import create_dataset
         >>> dataset = create_dataset(opt)
     """
+
     data_loader = CustomDatasetDataLoader(opt)
     dataset = data_loader.load_data()
     return dataset
@@ -91,3 +92,49 @@ class CustomDatasetDataLoader():
             if i * self.opt.batch_size >= self.opt.max_dataset_size:
                 break
             yield data
+
+
+def data_loader_mask(opt):
+    """
+    Converting the images for PILImage to tensor,
+    so they can be accepted as the input to the network
+    :return :
+    """
+    print("Loading Dataset")
+  
+    default_transform = albu.Compose([ PadDifferentlyIfNeeded(512,512,mask_value=0)
+    , AT.ToTensor()])
+  
+    transform = albu.Compose([ albu.RandomRotate90(1.0)
+    , albu.HorizontalFlip(0.5),PadDifferentlyIfNeeded(512,512,mask_value=0), AT.ToTensor()])
+  
+    testset_gt = ImageDataset(root=TEST_ENHANCED_IMG_DIR , transform=default_transform)
+    
+    trainset_2_gt = ImageDataset(root=ENHANCED2_IMG_DIR, transform=transform)
+
+    testset_inp = ImageDataset(root=TEST_INPUT_IMG_DIR , transform=default_transform)
+    trainset_1_inp = ImageDataset(root=INPUT_IMG_DIR , transform=transform)
+   
+
+   
+    train_loader_cross = torch.utils.data.DataLoader(
+        ConcatDataset(
+            trainset_1_inp,
+            trainset_2_gt
+        ),num_workers=opt.num_threads,
+        batch_size=opt.batch_size * len(opt.gpus_id.split(',')),  # Enlarge batch_size by a factor of len(device_ids)
+        shuffle=True
+    )
+
+    test_loader = torch.utils.data.DataLoader(
+        ConcatDataset(
+           
+            testset_inp,
+            testset_gt
+        ),num_workers=opt.num_threads,
+        batch_size=opt.batch_size * len(opt.gpus_id.split(',')),  # Enlarge batch_size by a factor of len(device_ids)
+        shuffle=False
+    )
+    print("Finished loading dataset")
+
+    return  train_loader_cross, test_loader

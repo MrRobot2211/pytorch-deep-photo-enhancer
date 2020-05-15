@@ -3,7 +3,7 @@ import torch.nn as nn
 from torch.nn import init
 import functools
 from torch.optim import lr_scheduler
-
+from torch.autograd import Variable
 
 ###############################################################################
 # Helper Functions
@@ -281,6 +281,53 @@ class GANLoss(nn.Module):
             else:
                 loss = prediction.mean()
         return loss
+
+
+class LambdaAdapter:
+    def __init__(self, lambda_init,D_G_ratio):
+        
+        self.loss_wgan_gp_bound = 5e-2
+        self.loss_wgan_gp_mv_decay = 0.99
+        self.netD_wgan_gp_mvavg_1 = 0
+        self.netD_wgan_gp_mvavg_2 = 0
+        self.netD_update_buffer_1 = 0
+        self.netD_update_buffer_2 = 0
+        self.netD_gp_weight_1 = lambda_init
+        self.netD_gp_weight_2 = lambda_init
+        self.netD_times = D_G_ratio
+        self.netD_times_grow = 1
+        self.netD_buffer_times = 50  #should depend on batch size as the original
+        self.netD_change_times_1 = D_G_ratio
+        self.netD_change_times_2 = D_G_ratio
+        
+        self.loss_wgan_lambda_ignore = 1
+        self.loss_wgan_lambda_grow = 2.0
+
+    def update_penalty_weights(self,batches_done,gr_penalty1,gr_penalty2):
+        # if not (epoch * batch_count + current_iter < 1):
+        if not (batches_done < 1):
+        #  gradient penalty 1 and 2   ___ -netD_train_s[-7]   -netD_train_s[-7]  
+            self.netD_wgan_gp_mvavg_1 = self.netD_wgan_gp_mvavg_1 * self.loss_wgan_gp_mv_decay + (gr_penalty1 / self.netD_gp_weight_1) * (1 - self.loss_wgan_gp_mv_decay)
+            self.netD_wgan_gp_mvavg_2 = self.netD_wgan_gp_mvavg_2 * self.loss_wgan_gp_mv_decay + (gr_penalty2 / self.netD_gp_weight_2) * (1 - self.loss_wgan_gp_mv_decay)
+
+        if (self.netD_update_buffer_1 == 0) and (self.netD_wgan_gp_mvavg_1 > self.loss_wgan_gp_bound) :
+           
+            self.netD_gp_weight_1 = self.netD_gp_weight_1 * self.loss_wgan_lambda_grow
+            self.netD_change_times_1 = self.netD_change_times_1 * self.netD_times_grow
+            self.netD_update_buffer_1 = self.netD_buffer_times
+            self.netD_wgan_gp_mvavg_1 = 0
+        
+        self.netD_update_buffer_1 = 0 if self.netD_update_buffer_1 == 0 else self.netD_update_buffer_1 - 1
+
+        if (self.netD_update_buffer_2 == 0) and (self.netD_wgan_gp_mvavg_2 > self.loss_wgan_gp_bound) :
+           
+            self.netD_gp_weight_2 = self.netD_gp_weight_2 * self.loss_wgan_lambda_grow
+            self.netD_change_times_2 = self.netD_change_times_2 * self.netD_times_grow
+            self.netD_update_buffer_2 = self.netD_buffer_times
+            self.netD_wgan_gp_mvavg_2 = 0
+        
+        self.netD_update_buffer_2 = 0 if self.netD_update_buffer_2 == 0 else self.netD_update_buffer_2 - 1
+        
 
 
 def cal_gradient_penalty(netD, real_data, fake_data, device, type='mixed', constant=1.0, lambda_gp=10.0):
