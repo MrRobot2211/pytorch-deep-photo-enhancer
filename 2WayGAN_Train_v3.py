@@ -6,6 +6,7 @@ import itertools
 from libs.compute import *
 from libs.constant import *
 from libs.model import *
+from libs.networks import *
 import gc
 
 import tensorboardX  
@@ -22,53 +23,13 @@ if __name__ == "__main__":
         #writer1 = checkpoint["summary_writer"] 
         writer1 = tensorboardX.SummaryWriter('./runs/exp-1')
     else:
+        checkpoint = False
 
         writer1 = tensorboardX.SummaryWriter('./runs/exp-1')
 
-    # Creating generators
-    generatorX = Generator()
-    generatorX_ = Generator_(generatorX)
-
-    
-    if continue_checkpoint:
-        generatorX.load_state_dict( checkpoint['generatorX'])
-        generatorX_.load_state_dict( checkpoint['generatorX_'])
-    
-    else:
-        init_net(generatorX)
-        init_net(generatorX_)
-
-    generatorX = nn.DataParallel(generatorX)
-    generatorX_ = nn.DataParallel(generatorX_)
-   
-    #create inverse generators
-    generatorY = Generator()
-    generatorY_ = Generator_(generatorY)
-    if continue_checkpoint:
-        generatorY.load_state_dict( checkpoint['generatorY'])
-        generatorY_.load_state_dict( checkpoint['generatorY_'])
-    else:
-        init_net(generatorY)
-        init_net(generatorY_)
-
-    generatorY = nn.DataParallel(generatorY)
-    generatorY_ = nn.DataParallel(generatorY_)
-
-
-    #create discriminators
-    discriminatorY = Discriminator()
-    discriminatorX = Discriminator()
-
-    if continue_checkpoint:
-        discriminatorX.load_state_dict( checkpoint['discriminatorX'])
-        discriminatorY.load_state_dict( checkpoint['discriminatorY'])
-    else:
-        init_net(discriminatorY)
-        init_net(discriminatorX)
-    
-    discriminatorY = nn.DataParallel(discriminatorY)
-    discriminatorX = nn.DataParallel(discriminatorX)
-
+    generatorX,generatorX_ = create_generatorsX(checkpoint)
+    generatorY,generatorY_ = create_generatorsY(checkpoint)
+    discriminatorX,discriminatorY = create_dixcriminators(checkpoint)
 
     if torch.cuda.is_available():
         generatorX.cuda(device=device)
@@ -139,8 +100,7 @@ if __name__ == "__main__":
             
             realEnhanced = Variable(groundTruth.type(Tensor_gpu))   # stands for Y
             
-            fakeEnhanced = generatorX(realInput)   # stands for Y'
-
+            fakeEnhanced = generatorX(realInput)            # stands for Y'
          
             fakeInput = generatorY(realEnhanced)           # stands for x'
           
@@ -168,10 +128,11 @@ if __name__ == "__main__":
             
 
             # use the lambda adapter to decide when to train the generators
+
             #train generators
             if (LambdaAdapt.netD_change_times_1 > 0 and LambdaAdapt.netD_times >= 0 and LambdaAdapt.netD_times % LambdaAdapt.netD_change_times_1 == 0): # or (batches_done % 50 == 0): 
                 LambdaAdapt.netD_times = 0
-           # if batches_done % 20 == 0:
+        
                 recInput = generatorY_(torch.clamp(fakeEnhanced,0,1))     # stands for x''
                 recEnhanced = generatorX_(torch.clamp(fakeInput,0,1))   # stands for y''
 
@@ -189,7 +150,6 @@ if __name__ == "__main__":
 
                 g_loss = computeGeneratorLossFor2WayGan(ag, i_loss, c_loss)
 
-
                 g_loss.backward()
 
                 torch.nn.utils.clip_grad_value_(itertools.chain(generatorX.parameters(), generatorY.parameters()),clip_value)
@@ -203,6 +163,7 @@ if __name__ == "__main__":
                 else:
                     gc.collect()
             #save checkpoints to restart training
+
             # Testing Network
             if batches_done % 150 == 0:
                
@@ -213,14 +174,12 @@ if __name__ == "__main__":
                 with torch.no_grad():
                     for j, (data_t, gt1_t) in enumerate(testLoader, 0):
 
-                       
                         input_test, maskInput_test = data_t
                         Testgt, maskEnhanced_test = gt1_t
 
                         maskInput_test = Variable(maskInput_test.type(Tensor_gpu)) 
                         maskEnhanced_test = Variable(maskEnhanced_test.type(Tensor_gpu)) 
 
-                        
                         realInput_test = Variable(input_test.type(Tensor_gpu))
                         realEnhanced_test = Variable(Testgt.type(Tensor_gpu))
 
@@ -228,7 +187,9 @@ if __name__ == "__main__":
                         
                         fakeEnhanced_test = generatorX(realInput_test)
                         test_loss = criterion( realEnhanced_test*maskEnhanced_test,torch.clamp(fakeEnhanced_test,0,1)*maskInput_test  )
+                        
                         #psnr is okey because answers are from zero to one...we should check clamping in between (?)
+                        
                         psnr = psnr + 10 * torch.log10(1 / (test_loss))
                         d_test_loss = d_test_loss + torch.mean(discriminatorY(fakeEnhanced_test))-torch.mean(discriminatorY(realEnhanced_test))
                     
