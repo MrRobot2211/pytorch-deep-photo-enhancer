@@ -109,6 +109,8 @@ if __name__ == "__main__":
             set_requires_grad([discriminatorY,discriminatorX], True)
 
             optimizer_d.zero_grad()
+
+            #calculate adversaria discriminator loss
               
             ad = compute_d_adv_loss(discriminatorY,realEnhanced,fakeEnhanced ) + compute_d_adv_loss(discriminatorX,realInput,fakeInput)
 
@@ -139,8 +141,9 @@ if __name__ == "__main__":
                 set_requires_grad([discriminatorY,discriminatorX], False)
 
                 optimizer_g.zero_grad()
-               
+               #calclate adverarial gnerator loss
                 ag = compute_g_adv_loss(discriminatorY,discriminatorX, fakeEnhanced,fakeInput)
+                
                 
                 i_loss = computeIdentityMappingLoss_dpeversion(realInput* maskInput, realEnhanced*maskEnhanced, fakeInput*maskEnhanced, fakeEnhanced* maskInput)
                 
