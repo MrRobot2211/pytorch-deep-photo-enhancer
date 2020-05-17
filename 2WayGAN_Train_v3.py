@@ -46,6 +46,7 @@ if __name__ == "__main__":
     # MSE Loss and Optimizer
     criterion = nn.MSELoss()
 
+    #set optimizer and scheduler
     optimizer_g = optim.Adam(itertools.chain(generatorX.parameters(), generatorY.parameters(),generatorX_.parameters(),generatorY_.parameters()), lr=LEARNING_RATE, betas=(BETA1, BETA2))
     optimizer_d = optim.Adam(itertools.chain(discriminatorY.parameters(),discriminatorX.parameters()), lr=LEARNING_RATE, betas=(BETA1, BETA2))
 
@@ -58,7 +59,7 @@ if __name__ == "__main__":
         scheduler_g = torch.optim.lr_scheduler.LambdaLR(optimizer_g, adjustLearningRate( 150, 150))
         scheduler_d = torch.optim.lr_scheduler.LambdaLR(optimizer_d, adjustLearningRate( 150, 150))
 
-
+    #initialize weight penalty adaper
     if continue_checkpoint:
         LambdaAdapt = checkpoint["adapter"]
         #LambdaAdapt.netD_times=50
@@ -141,10 +142,11 @@ if __name__ == "__main__":
                 set_requires_grad([discriminatorY,discriminatorX], False)
 
                 optimizer_g.zero_grad()
+                
                #calclate adverarial gnerator loss
                 ag = compute_g_adv_loss(discriminatorY,discriminatorX, fakeEnhanced,fakeInput)
                 
-                
+
                 i_loss = computeIdentityMappingLoss_dpeversion(realInput* maskInput, realEnhanced*maskEnhanced, fakeInput*maskEnhanced, fakeEnhanced* maskInput)
                 
                 #i_loss = computeIdentityMappingLoss(generatorX, generatorY, realEnhanced *maskEnhanced,realInput * maskInput)

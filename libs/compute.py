@@ -22,24 +22,7 @@ class ImageDataset(ImageFolder):
     def __init__(self, root, transform=None):
         super(ImageDataset, self).__init__( root, transform=transform)
 
-        # def __init__(self, df: pd.DataFrame = None, datatype: str = 'train', img_ids: np.array = None,
-        #             transform = None,
-        #             preprocessing=None):
-        #     self.df = df
-        #     if datatype != 'test':
-        #     self.data_folder = f"{path}/train_images"
-            
-        #self.img_ids = img_ids
-        #self.transforms = transforms
-        #self.preprocessing = preprocessing
-    def  _make_mask(self,img,output_size=(512,512)):
-        image_width, image_height = output_size
-        crop_height, crop_width = img.size
-        crop_top = int(round((image_height - crop_height) / 2.))
-        crop_left = int(round((image_width - crop_width) / 2.))
-        output = np.zeros(output_size)
-        output[crop_left:crop_left + crop_width, crop_top:crop_top +crop_width ] = 1
-        return output
+       
 
     def __getitem__(self, index):
         
@@ -55,10 +38,6 @@ class ImageDataset(ImageFolder):
         img = augmented['image']
         mask = augmented['mask']
 
-        # if self.preprocessing:
-        #     preprocessed = self.preprocessing(image=img, mask=mask)
-        #     img = preprocessed['image']
-        #     mask = preprocessed['mask']
             
         return img, mask
 
@@ -74,11 +53,7 @@ def data_loader_mask():
     :return :
     """
     print("Loading Dataset")
-    #transform = transforms.Compose([transforms.Resize((SIZE, SIZE), interpolation='PIL.Image.ANTIALIAS'), transforms.ToTensor()])
-    #transform = transforms.Compose([
-    # you can add other transformations in this list
-   # transforms.CenterCrop(512),
-   # transforms.ToTensor()  ])
+    
     default_transform = albu.Compose([ PadDifferentlyIfNeeded(512,512,mask_value=0)
     , AT.ToTensor()])
   
@@ -86,13 +61,12 @@ def data_loader_mask():
     , albu.HorizontalFlip(0.5),PadDifferentlyIfNeeded(512,512,mask_value=0), AT.ToTensor()])
   
     testset_gt = ImageDataset(root=TEST_ENHANCED_IMG_DIR , transform=default_transform)
-    trainset_1_gt = ImageDataset(root=ENHANCED_IMG_DIR, transform=transform)
+    
     trainset_2_gt = ImageDataset(root=ENHANCED2_IMG_DIR, transform=transform)
 
     testset_inp = ImageDataset(root=TEST_INPUT_IMG_DIR , transform=default_transform)
     trainset_1_inp = ImageDataset(root=INPUT_IMG_DIR , transform=transform)
-    trainset_2_inp = ImageDataset(root=INPUT2_IMG_DIR, transform=transform)
-
+   
    
     train_loader_cross = torch.utils.data.DataLoader(
         ConcatDataset(
