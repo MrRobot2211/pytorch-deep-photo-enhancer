@@ -7,7 +7,7 @@ from torch.autograd import Variable
 from torch.utils.data import TensorDataset, DataLoader,Dataset
 from torchvision.datasets import ImageFolder
 import albumentations as albu
-from albumentations import torch as AT
+import albumentations.pytorch as AT
 import pandas as pd
 from libs.custom_transforms import PadDifferentlyIfNeeded
 from libs.constant import *
