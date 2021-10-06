@@ -12,6 +12,9 @@ My code is based on https://github.com/mtics/deep-photo-enhancer
 
 https://github.com/junyanz/pytorch-CycleGAN-and-pix2pix
 
+
+The latest code is on the `dev` branch
+
 ## Requirements
 
 - Python 3.6
